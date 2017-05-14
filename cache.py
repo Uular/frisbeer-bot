@@ -26,9 +26,12 @@ class Cache:
         except KeyError:
             pass
         if self.case_insensitive:
-            key = key.lower()
-        fuzzes = [(data_key, fuzz.partial_ratio(data_key, key)) for data_key in self.data_store.keys()]
+            key_val = key.lower()
+        else:
+            key_val = key
+        fuzzes = [(data_key, fuzz.partial_ratio(data_key, key_val)) for data_key in self.data_store.keys()]
         fuzzes = sorted(fuzzes, key=lambda key_ratio_pair: key_ratio_pair[1])
+        logging.debug("Best match for {} was {} at level {}".format(key, fuzzes[-1][0], fuzzes[-1][1]))
         return self.data_store[fuzzes[-1][0]]
 
     def is_valid(self):
