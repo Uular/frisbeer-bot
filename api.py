@@ -1,6 +1,6 @@
 import requests
 
-api_url = "http://ranta.org/frisbeer/API/"
+api_url = "https://ranta.org/frisbeer/API/"
 # api_url = "http://localhost:8000/API/"
 players = "players"
 
