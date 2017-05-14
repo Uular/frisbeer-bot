@@ -15,6 +15,7 @@ def game(bot, update):
 
 
 def rank(bot, update):
+    logging.info("Rank query")
     logging.debug(update.message.text)
     try:
         nick = update.message.text.split("/rank ", 1)[1]

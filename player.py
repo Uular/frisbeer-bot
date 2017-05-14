@@ -1,10 +1,14 @@
+import logging
+
 from api import API
+from cache import Cache
 
 
 class Player:
     NICK = "name"
     RANK = "rank"
     SCORE = "score"
+    _cache = None
 
     def __init__(self, nick, rank, score):
         self.nick = nick
@@ -13,12 +17,11 @@ class Player:
 
     @classmethod
     def by_nick(cls, nick):
-        json_data = API.get_players()
-        player_data = None
-        for p in json_data:
-            if p[Player.NICK] == nick:
-                player_data = p
-                break
+        if Player._cache is None or not Player._cache.is_valid():
+            logging.info("Getting newer data from server")
+            json_data = API.get_players()
+            Player._cache = Cache(Player.NICK, json_data)
+        player_data = Player._cache.fuzzy_get(nick)
         return cls(player_data[Player.NICK], player_data[Player.RANK], player_data[Player.SCORE])
 
     def __str__(self):
