@@ -10,7 +10,7 @@ class Cache:
         self.case_insensitive = case_insensitive
         for entity in data:
             key_val = entity[key]
-            if not case_insensitive:
+            if case_insensitive:
                 key_val = key_val.lower()
             self.data_store[key_val] = entity
         self.timestamp = datetime.datetime.now()
