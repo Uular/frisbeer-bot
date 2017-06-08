@@ -2,3 +2,4 @@ python-telegram-bot
 requests
 fuzzywuzzy
 python-Levenshtein
+sqlalchemy
