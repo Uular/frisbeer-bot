@@ -27,6 +27,7 @@ def rank(bot, update):
     try:
         nick = update.message.text.split("/rank ", 1)[1]
     except IndexError:
+        # No nick provided by user
         telegram_username = update.message.from_user.username
         if not telegram_username or not len(telegram_username):
             reply(usage)
@@ -36,6 +37,13 @@ def rank(bot, update):
             reply(usage)
             return
         nick = user.frisbeer_nick
+    else:
+        # Provided nick may be a Telegram username
+        if nick.startswith('@') and len(nick) > 1:
+            user = session.query(User).filter(User.telegram_username == nick[1:]).first()
+            if user:
+                nick = user.frisbeer_nick
+
     player = Player.by_nick(nick)
     reply(str(player))
 
