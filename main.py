@@ -1,8 +1,10 @@
+import json
 import logging
 import sys
 
 from sqlalchemy.orm import sessionmaker
-from telegram.ext import Updater, CommandHandler
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup
+from telegram.ext import Updater, CommandHandler, CallbackQueryHandler
 from sqlalchemy import create_engine, Column, Integer, String
 from sqlalchemy.ext.declarative import declarative_base
 from player import Player
@@ -16,7 +18,26 @@ def start(bot, update):
 
 
 def game(bot, update):
-    update.message.reply_text("Soon...")
+    keyboard = [
+        [InlineKeyboardButton("New game", callback_data=json.dumps({"action": "create"})),
+         InlineKeyboardButton("List pending games", callback_data=json.dumps({"action": "list"}))]
+                ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    update.message.reply_text('Please choose:', reply_markup=reply_markup)
+
+
+def button(bot, update):
+    query = update.callback_query
+    data = json.loads(query.data)
+    keyboard = [
+        [InlineKeyboardButton("#norsu, 1.6. klo 18:15 5/6", callback_data=json.dumps({"action": "inspect_game", "id": 1}))],
+        [InlineKeyboardButton("#hippo, 5.5. 0/6", callback_data=json.dumps({"action": "inspect_game", "id": 2}))]
+    ]
+
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    query.message.edit_text('Please choose:', reply_markup=reply_markup)
 
 
 def rank(bot, update):
@@ -102,6 +123,7 @@ updater.dispatcher.add_handler(CommandHandler('start', start))
 updater.dispatcher.add_handler(CommandHandler('game', game))
 updater.dispatcher.add_handler(CommandHandler('rank', rank))
 updater.dispatcher.add_handler(CommandHandler('register', register))
+updater.dispatcher.add_handler(CallbackQueryHandler(button))
 
 updater.start_polling()
 updater.idle()
