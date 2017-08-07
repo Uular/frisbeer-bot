@@ -3,41 +3,72 @@ import logging
 import sys
 
 from sqlalchemy.orm import sessionmaker
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup
-from telegram.ext import Updater, CommandHandler, CallbackQueryHandler
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from sqlalchemy import create_engine, Column, Integer, String
 from sqlalchemy.ext.declarative import declarative_base
+
+from bot import Bot
+from game import Game
 from player import Player
+from action import Action
 
-logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.DEBUG,
-                    filename="log.txt")
+logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.DEBUG)
 
-
-def start(bot, update):
-    update.message.reply_text('Lets play frisbeer!\n Start with /rank <nick>')
-
-
+"""
 def game(bot, update):
     keyboard = [
         [InlineKeyboardButton("New game", callback_data=json.dumps({"action": "create"})),
          InlineKeyboardButton("List pending games", callback_data=json.dumps({"action": "list"}))]
-                ]
+    ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
     update.message.reply_text('Please choose:', reply_markup=reply_markup)
 
 
-def button(bot, update):
-    query = update.callback_query
-    data = json.loads(query.data)
+def filter_pending(game):
+    return game.state == Game.State.PENDING
+
+
+def create_game(bot, update, query):
+    game = Game.create()
+
+
+def inspect_game(bot, update, query):
+    pass
+
+
+def list_pending_games(bot, update):
+    pass
+
+
+def join_game(bot, update):
+    pass
+
+
+def button_callback(bot, update):
+
+    actions = {
+        Action.CREATE: create_game,
+        Action.INSPECT: inspect_game,
+        Action.LIST: list_pending_games,
+        Action.JOIN: join_game
+    }
+    action = Action(data["action"])
+    actions[action](bot, update)
+
+    games = Game.filter(filter_pending)
     keyboard = [
-        [InlineKeyboardButton("#norsu, 1.6. klo 18:15 5/6", callback_data=json.dumps({"action": "inspect_game", "id": 1}))],
-        [InlineKeyboardButton("#hippo, 5.5. 0/6", callback_data=json.dumps({"action": "inspect_game", "id": 2}))]
+        [InlineKeyboardButton("{}, {} {}/6".format(game.name, game.date, len(game.players)),
+                              callback_data=json.dumps({"action": "inspect", "id": game.instance_id}))]
+        for game in games
     ]
 
-    reply_markup = InlineKeyboardMarkup(keyboard)
-
-    query.message.edit_text('Please choose:', reply_markup=reply_markup)
+    if keyboard:
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        query.message.edit_text('Please choose:', reply_markup=reply_markup)
+    else:
+        keyboard = [[InlineKeyboardButton("Create a new game", callback_data=json.dumps({"action": "create"}))]]
+        query.message.edit_text("No games available", reply_markup=InlineKeyboardMarkup(keyboard))
 
 
 def rank(bot, update):
@@ -116,14 +147,7 @@ class User(Base):
 Base.metadata.create_all(engine)
 Session = sessionmaker(bind=engine)
 session = Session()
+"""
 
-updater = Updater(sys.argv[1])
-
-updater.dispatcher.add_handler(CommandHandler('start', start))
-updater.dispatcher.add_handler(CommandHandler('game', game))
-updater.dispatcher.add_handler(CommandHandler('rank', rank))
-updater.dispatcher.add_handler(CommandHandler('register', register))
-updater.dispatcher.add_handler(CallbackQueryHandler(button))
-
-updater.start_polling()
-updater.idle()
+bot = Bot(sys.argv[1])
+bot.start()

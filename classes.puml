@@ -1,0 +1,105 @@
+@startuml
+class HttpClient {
+{static}_auth_token: str
++login(username: str, password: str) -> None
+{static} +get(endpoint: str, instance_id=None: int) -> Union[Iterable[dict], dict]
+{static} +post(endpoint: str, payload: dict) -> dict
+{static} +patch(endpoint: str, payload: dict) -> dict
+}
+
+class Cache {
++Cache(constructor: Callable[dict] -> Cacheable, key_accessor: Callable[Cacheable] -> Hashable, data: List[dict])
++get(key: Hashable): Cacheable
++get_all(): List[Cacheable]
++filter(Callable[[Cacheable], bool]): -> List[Cacheable]
+}
+
+interface Cacheable {
++from_json(data: dict) -> Cacheable
+}
+
+interface ApiEndpoint {
+-_cache: Cache
+-_update_cache()
++filter(Callable[[ApiEndpoint], bool]) -> List[ApiEndpoint]
+}
+
+class Game {
+id: int
+name: str
+date: Datetime
+players: List[Player]
+location: Location
+
+{static} +create_game() -> Game
++join(player: Player) -> bool
+}
+
+class Player {
+id: int
+name: str
+rank: Rank
+score: int
+}
+
+class Rank {
+name: str
+numerical_value: int
+image_url: str
+}
+
+class Location {
+name: str
+longitude: float
+latitude: float
+}
+
+class Bot {
+Bot(api_key: str)
+/game() -> None
+/rank() -> None
+/register() -> None
+callback() -> None
+start() -> None
+}
+
+class Keyboard {
++Keyboard()
++add(text: str, callback_data: str, row: int, col: int)
++build() -> InlineKeyboardMarkup
+}
+
+enum Action {
+CREATE
+LIST
+INSPECT
+}
+
+enum GameAction {
+JOIN
+}
+
+GameAction <|-- Action
+
+Cache *-- Cacheable : stores
+
+ApiEndpoint --|> Cache : extends
+ApiEndpoint --|> Cacheable : extends
+ApiEndpoint *-- HttpClient : uses
+
+Game .-|> ApiEndpoint : implements
+Player .-|> ApiEndpoint : implements
+Location .-|> ApiEndpoint : implements
+Rank .-|> ApiEndpoint : implements
+
+Game *-- Location : has
+Game *-- Player : has
+
+Player *-- Rank : has
+
+Bot *-- Keyboard : uses
+Bot *-- Game : uses
+Bot *-- Player : uses
+Bot *-- Location : uses
+Bot *-- Action : uses
+@enduml

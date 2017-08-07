@@ -1,0 +1,76 @@
+@startuml
+actor User as u
+entity Bot as b
+entity Game as g
+entity Location as l
+entity API as a
+database Cache as c
+
+u->b+ : /game
+u<-b-: Choose action:\n\
+[List] {"action": LIST\n\
+[Create] {"action": CREATE}
+u++
+u->b : Create
+u--
+b++
+u<-b- : Enter name:\n\
+{Text input}
+u++
+u->b : Name
+u--
+b++
+u<-b- : Enter date:\n\
+{date input}
+u++
+u->b : Date
+u--
+b++
+b->l+ : Get locations
+l->a+: Get Locations
+l<-a-: List of locations
+b<-l- : \
+Location 1\n\
+Location 2
+u<-b- : Pick location:\n\
+[Location 1]\n\
+[Location 2]\n\
+[Enter new]
+u++
+u->b : Location
+u--
+b++
+alt Enter new location
+u<-b-: Enter name for location\n\
+{text input}
+u++
+u->b: Name
+u--
+b++
+loop Enter longitude and latitude
+u<-b-: Enter value\n\
+{float input}
+u++
+u->b: value
+u--
+b++
+end
+end
+u<-b-:\
+Join game?\n\
+[yes]\n\
+[no]
+u++
+u->b : Answer
+u--
+b++
+alt if joining game
+b->c+: Get player by username
+b<-c-: Player
+end
+b->g+: Create
+g->a+: Create game
+g<-a-: Created
+b<-g-: Game
+u<-b-: Inspect
+@enduml

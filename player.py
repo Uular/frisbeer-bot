@@ -22,7 +22,15 @@ class Player:
             json_data = API.get_players()
             Player._cache = Cache(Player.NICK, json_data)
         player_data = Player._cache.fuzzy_get(nick)
-        return cls(player_data[Player.NICK], player_data[Player.RANK], player_data[Player.SCORE])
+        return cls.from_json(player_data)
+
+    @classmethod
+    def from_json(cls, json_data):
+        return cls(
+            json_data[Player.NICK],
+            json_data[Player.RANK],
+            json_data[Player.SCORE]
+        )
 
     def __str__(self):
         if len(self.rank):
