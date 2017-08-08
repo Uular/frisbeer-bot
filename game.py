@@ -64,8 +64,8 @@ class Game(Cacheable):
         return Game._cache.filter(filtering_function)
 
     @staticmethod
-    def create():
-        return Game.from_json(API.create_game())
+    def create(name, date):
+        return Game.from_json(API.create_game(name, date))
 
     def join(self, player: Player):
         pass

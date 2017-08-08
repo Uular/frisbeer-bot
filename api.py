@@ -5,7 +5,6 @@ import requests
 api_url = "https://t3mu.kapsi.fi/frisbeer/API/"
 players = "players/"
 games = "games/"
-content_type = {'content-type': 'application/json'}
 
 
 class APIError(Exception):
@@ -13,12 +12,36 @@ class APIError(Exception):
 
 
 class API:
+    _default_headers = {
+        # 'content-type': 'application/json',
+    }
+
+    @staticmethod
+    def login(username, password):
+        payload = {
+            "username": username,
+            "password": password
+        }
+        pl = API._post("token-auth/", payload)
+        API._default_headers["Authorization"] = "Token " + pl["token"]
+
     @staticmethod
     def _get(endpoint, instance_id=None):
         url = api_url + endpoint
         if instance_id:
             url += instance_id
-        response = requests.get(url, headers=content_type)
+        response = requests.get(url, headers=API._default_headers)
+        if not response.ok:
+            raise APIError("Error in response. Status {}, message {}", response.status_code, response.content)
+        try:
+            return response.json()
+        except ValueError as e:
+            raise APIError(e)
+
+    @staticmethod
+    def _post(endpoint, payload):
+        url = api_url + endpoint
+        response = requests.post(url, headers=API._default_headers, data=payload)
         if not response.ok:
             raise APIError("Error in response. Status {}, message {}", response.status_code, response.content)
         try:
@@ -31,17 +54,12 @@ class API:
         return API._get(players)
 
     @staticmethod
-    def create_game(name="asd"):
+    def create_game(name, date):
         payload = {
             "name": name,
+            "date": date.isoformat()
         }
-        response = requests.post(api_url + games, headers=content_type, data=payload)
-        if not response.ok:
-            raise APIError("Error in response")
-        try:
-            return response.json()
-        except ValueError as e:
-            raise APIError(e)
+        return API._post(games, payload)
 
     @staticmethod
     def get_games():

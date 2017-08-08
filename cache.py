@@ -9,7 +9,7 @@ from cacheable import Cacheable
 
 
 class Cache:
-    def __init__(self, cls, key_accessor, data, case_insensitive=True):
+    def __init__(self, cls, key_accessor, data, case_insensitive=False):
         self.data_store = {}
         self.case_insensitive = case_insensitive
         for entity in data:

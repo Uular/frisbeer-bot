@@ -128,25 +128,6 @@ def register(bot, update):
         session.commit()
         reply("Updated nick to {}".format(frisbeer_nick))
 
-
-engine = create_engine('sqlite:///db.sqlite3', echo=True)
-Base = declarative_base()
-
-
-class User(Base):
-    __tablename__ = 'users'
-
-    id = Column(Integer, primary_key=True)
-    frisbeer_nick = Column(String)
-    telegram_username = Column(String, unique=True)
-
-    def __repr__(self):
-        return "{} - {}".format(self.telegram_nick, self.frisbeer_nick)
-
-
-Base.metadata.create_all(engine)
-Session = sessionmaker(bind=engine)
-session = Session()
 """
 
 bot = Bot(sys.argv[1])
