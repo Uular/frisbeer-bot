@@ -62,5 +62,9 @@ class API:
         return API._post(games, payload)
 
     @staticmethod
+    def join_game(game_id, player_id):
+        pass
+
+    @staticmethod
     def get_games():
         return API._get(games)

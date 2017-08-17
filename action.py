@@ -13,15 +13,18 @@ class Action:
     GAME_MENU = 6
 
     _ACTION = "a"
+    _RETURN_ACTION = "ra"
     _PHASE = "p"
     _NEXT_PHASE = "np"
     _ID = "i"
     _DATA = "d"
 
-    def __init__(self, action: int, phase: int = 1, next_phases: List[int] = None, id_=0, data=""):
+    def __init__(self, action: int, phase: int = 1, next_phases: List[int] = None, id_=0, data="",
+                 ready_action=GAME_MENU):
         if not next_phases:
             next_phases = []
         self.action = action
+        self.return_action = ready_action
         self.phase = phase
         self.next_phases = next_phases
         self.id = id_
@@ -45,7 +48,7 @@ class Action:
 
     @classmethod
     def join_game(cls, instance_id):
-        return cls(Action.JOIN_GAME, data=instance_id)
+        return cls(Action.JOIN_GAME, id_=instance_id)
 
     @classmethod
     def parse(cls, json_data: str):

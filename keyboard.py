@@ -31,5 +31,5 @@ class Keyboard:
 class YesNoKeyboard(Keyboard):
     def __init__(self, callback_data: Action, answer_key: Union[str, int]):
         super().__init__()
-        self.add("Yes", callback_data.copy().add_data(answer_key, True), 1, 1)
-        self.add("No", callback_data.copy().add_data(answer_key, False), 1, 2)
+        self.add("Yes", callback_data.copy().set_data({answer_key: True}), 1, 1)
+        self.add("No", callback_data.copy().set_data({answer_key: False}), 1, 2)

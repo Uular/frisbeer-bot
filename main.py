@@ -98,36 +98,6 @@ def rank(bot, update):
 
     player = Player.by_nick(nick)
     reply(str(player))
-
-
-def register(bot, update):
-    logging.info("Registering nick")
-    logging.debug(update.message.text)
-    logging.debug(update.message.from_user.username)
-    reply = update.message.reply_text
-    telegram_username = update.message.from_user.username
-
-    if not telegram_username:
-        reply("First set up a Telegram username in settings")
-        return
-
-    try:
-        frisbeer_nick = update.message.text.split("register ", 1)[1]
-    except IndexError:
-        reply("Usage: /register <frisbeer nick>")
-        return
-
-    user = session.query(User).filter(User.telegram_username == telegram_username).first()
-    if user is None:
-        user = User(telegram_username=telegram_username, frisbeer_nick=frisbeer_nick)
-        session.add(user)
-        session.commit()
-        reply("Paired {} with your username".format(frisbeer_nick))
-    else:
-        user.frisbeer_nick = frisbeer_nick
-        session.commit()
-        reply("Updated nick to {}".format(frisbeer_nick))
-
 """
 
 bot = Bot(sys.argv[1])

@@ -1,12 +1,18 @@
 from datetime import datetime, date, timedelta
 
+import logging
+
+import telegram
 from telegram.ext import Updater, CommandHandler, CallbackQueryHandler
 
 from action import Action
 from api import API
+from cache import NotFoundError
 from database import Database
 from game import Game
+from gamecache import GameCache
 from keyboard import Keyboard, YesNoKeyboard
+from playercache import PlayerCache
 
 
 class Bot:
@@ -31,8 +37,8 @@ class Bot:
 
         self.updater.dispatcher.add_handler(CommandHandler('start', self.greet))
         self.updater.dispatcher.add_handler(CommandHandler('game', self.game))
-        # self.updater.dispatcher.add_handler(CommandHandler('rank', self.rank))
-        # self.updater.dispatcher.add_handler(CommandHandler('register', self.register))
+        self.updater.dispatcher.add_handler(CommandHandler('rank', self.rank))
+        self.updater.dispatcher.add_handler(CommandHandler('register', self.register))
         self.updater.dispatcher.add_handler(CallbackQueryHandler(self.callback))
 
         self.actions = {
@@ -44,6 +50,10 @@ class Bot:
         }
 
         API.login("", "")
+        self.game_cache = GameCache()
+        self.game_cache.update()
+        self.player_cache = PlayerCache()
+        self.player_cache.update()
 
     def callback(self, bot, update):
         query = update.callback_query
@@ -65,6 +75,73 @@ class Bot:
         game_keyboard.add(Bot.Texts.LIST_GAMES, Action.list_games(), 2, 1)
         update.message.reply_text(Bot.Texts.CHOOSE_ACTION, reply_markup=game_keyboard.create())
 
+    def register(self, bot, update):
+        logging.info("Registering nick")
+        logging.debug(update.message.text)
+        logging.debug(update.message.from_user.username)
+        reply = update.message.reply_text
+        telegram_username = update.message.from_user.username
+        telegram_user_id = update.message.from_user.id
+
+        try:
+            frisbeer_nick = update.message.text.split("register ", 1)[1]
+        except IndexError:
+            reply("Usage: /register <frisbeer nick>")
+            return
+
+        telegram_user = Database.user_by_telegram_id(telegram_user_id)
+        try:
+            frisbeer_user = self.player_cache.filter(lambda player: player.nick == frisbeer_nick)[0]
+        except IndexError:
+            reply("No such frisbeer nick")
+            return
+
+        if telegram_user is None:
+            telegram_user = Database.create_user(frisbeer_user.id,
+                                                 frisbeer_user.nick,
+                                                 telegram_user_id,
+                                                 telegram_username)
+            reply("Paired {} with your username".format(frisbeer_nick))
+        else:
+            telegram_user.frisbeer_nick = frisbeer_user.nick
+            telegram_user.frisbeer_id = frisbeer_user.id
+            reply("Updated nick to {}".format(frisbeer_nick))
+        Database.save()
+
+    def rank(self, bot, update):
+        usage = "Usage: /rank <frisbeer nick | telegram username> \n" \
+                "or register your frisbeer nick with /register <frisbeer nick>"
+        reply = update.message.reply_text
+        logging.info("Rank query")
+        logging.debug(update.message.text)
+        try:
+            nick = update.message.text.split("/rank ", 1)[1]
+        except IndexError:
+            # No nick provided by user
+            telegram_user_id = update.message.from_user.id
+            user = Database.user_by_telegram_id(telegram_user_id)
+            if not user:
+                reply(usage)
+                return
+            nick = user.frisbeer_nick
+        else:
+            # Provided nick may be a Telegram username
+            if nick.startswith('@') and len(nick) > 1:
+                user = Database.user_by_telegram_username(nick[1:]).first()
+                if user:
+                    nick = user.frisbeer_nick
+
+        try:
+            player = self.player_cache.get(nick)
+        except NotFoundError:
+            player = self.player_cache.fuzzy_get(nick)
+        if player.rank:
+            reply('{} - score: {}, rank {} <a href="{}">&#8203;</a>'
+                  .format(player.nick, player.score, player.rank.name, player.rank.image_url),
+                  parse_mode=telegram.ParseMode.HTML)
+        else:
+            reply('{} - score {}'.format(player.nick, player.score))
+
     @staticmethod
     def _game_menu(bot, update, action):
         game_keyboard = Keyboard()
@@ -72,23 +149,33 @@ class Bot:
         game_keyboard.add(Bot.Texts.LIST_GAMES, Action.list_games(), 2, 1)
         update.callback_query.message.edit_text(Bot.Texts.CHOOSE_ACTION, reply_markup=game_keyboard.create())
 
-    @staticmethod
-    def _inspect_game(bot, update, action):
+    def _inspect_game(self, bot, update, action):
         keyboard = Keyboard()
         update.callback_query.message.edit_text("Loading...", reply_markup=keyboard.create())
         keyboard.add(Bot.Texts.BACK, Action.list_games(), 10, 1)
-        game = Game.by_id(action.id)
+        game = self.game_cache.get(action.id)
         update.callback_query.message.edit_text(str(game), reply_markup=keyboard.create())
 
-    @staticmethod
-    def _join_game(bot, update, action):
-        if not action.get_data("id"):
+    def _join_game(self, bot, update, action):
+        if not action.id:
+            logging.debug("No instance id in join action")
             return Bot._nop(bot, update, action)
-        keyboard = YesNoKeyboard(action, "join_game")
-        update.callback_query.message.edit_text(Bot.Texts.WANT_TO_JOIN, reply_markup=keyboard.create())
+        d = action.get_data()
+        try:
+            game = self.game_cache.get(action.id)
+        except NotFoundError:
+            self._nop(bot, update, action)
+        telegram_user_id = update.effective_user.id
+        if d is None:
+            keyboard = YesNoKeyboard(action, "join_game")
+            update.callback_query.message.edit_text(Bot.Texts.WANT_TO_JOIN, reply_markup=keyboard.create())
+        elif d:
+            game.join()
+            self._inspect_game(bot, update, action)
+        else:
+            self.actions[action.return_action](bot, update, None)
 
-    @staticmethod
-    def _create_game(bot, update, action):
+    def _create_game(self, bot, update, action):
         old_phase = action.phase
         if old_phase == 1:
             # Create the game
@@ -116,7 +203,7 @@ class Bot:
             Database.save()
         elif old_phase == 6:
             created_game = Game.create(game.name, game.date)
-            Bot._inspect_game(bot, update, Action.inspect_game(created_game.instance_id))
+            self._inspect_game(bot, update, Action.inspect_game(created_game.instance_id))
             return
 
         action.increase_phase()
@@ -161,10 +248,9 @@ class Bot:
             return
         update.callback_query.message.edit_text(text, reply_markup=keyboard.create())
 
-    @staticmethod
-    def _list_games(bot, update, action):
+    def _list_games(self, bot, update, action):
         update.callback_query.message.edit_text(Bot.Texts.LOADING)
-        games = Game.filter(lambda game: game.state in [Game.State.PENDING, Game.State.READY])
+        games = self.game_cache.filter(lambda game: game.state in [Game.State.PENDING, Game.State.READY])
         keyboard = Keyboard()
         text = Bot.Texts.UPCOMING_GAMES if games else Bot.Texts.NO_UPCOMING_GAMES
         for i in range(len(games)):

@@ -1,10 +1,8 @@
 from datetime import datetime
-import logging
 from enum import Enum
 from typing import List
 
 from api import API
-from cache import Cache
 from cacheable import Cacheable
 from player import Player
 
@@ -31,13 +29,6 @@ class Game(Cacheable):
         self.state = state
         self.players = players
 
-    @staticmethod
-    def _update_cache():
-        if Game._cache is None or not Game._cache.is_valid():
-            logging.info("Getting newer data from server")
-            json_data = API.get_games()
-            Game._cache = Cache(Game, lambda game: game.instance_id, json_data)
-
     @classmethod
     def from_json(cls, json_data: dict):
         return cls(json_data[Game.ID],
@@ -47,28 +38,18 @@ class Game(Cacheable):
                    [Player.from_json(data)
                     for data in json_data[Game.PLAYERS]])
 
-    @classmethod
-    def by_id(cls, instance_id: int):
-        Game._update_cache()
-        game_data = Game._cache.get(instance_id)
-        return Game.from_json(game_data)
-
     @staticmethod
-    def get_all():
-        Game._update_cache()
-        return Game._cache.get_all()
-
-    @staticmethod
-    def filter(filtering_function):
-        Game._update_cache()
-        return Game._cache.filter(filtering_function)
-
-    @staticmethod
-    def create(name, date):
+    def create(name: str, date: datetime):
+        """
+        Create a game in frisbeer backend
+        :param name: Name of the game
+        :param date: Data and time of the game
+        :return: Game object representing the game
+        """
         return Game.from_json(API.create_game(name, date))
 
     def join(self, player: Player):
-        pass
+        API.
 
     def __str__(self):
         return "{}".format(self.name)
