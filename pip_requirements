@@ -3,3 +3,4 @@ requests
 fuzzywuzzy
 python-Levenshtein
 sqlalchemy
+RandomWords

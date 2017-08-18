@@ -62,3 +62,8 @@ class Game(Cacheable):
 
     def __str__(self):
         return "{}".format(self.name)
+
+    def long_str(self):
+        return "{}\n{}\n{}/6\n{}".format(self.name, self.date,
+                                         len(self.players) if self.players else 0,
+                                         ", ".join([p.nick for p in self.players]))

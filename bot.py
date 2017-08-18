@@ -3,6 +3,7 @@ from datetime import datetime, date, timedelta
 import logging
 
 import telegram
+from random_words import RandomWords
 from telegram.ext import Updater, CommandHandler, CallbackQueryHandler
 
 from action import Action, CreateGameAction, ListGamesAction, ActionTypes, GameMenuAction, \
@@ -19,9 +20,8 @@ from playercache import PlayerCache
 class Bot:
     class Texts:
         LOADING = "Loading..."
-        NAME_THE_GAME = "Please give a name to the game"
         CHOOSE_ACTION = "Choose action"
-        START_A_GAME = "Start a new game"
+        CREATE_A_GAME = "Create a new game"
         LIST_GAMES = "List games"
         ENTER_DATE = "Give a date"
         ENTER_TIME = "Give a time"
@@ -70,7 +70,7 @@ class Bot:
     @staticmethod
     def _game_menu(bot, update, action):
         game_keyboard = Keyboard()
-        game_keyboard.add(Bot.Texts.START_A_GAME, CreateGameAction(), 1, 1)
+        game_keyboard.add(Bot.Texts.CREATE_A_GAME, CreateGameAction(), 1, 1)
         game_keyboard.add(Bot.Texts.LIST_GAMES, ListGamesAction(), 2, 1)
         update.callback_query.message.edit_text(Bot.Texts.CHOOSE_ACTION, reply_markup=game_keyboard.create())
 
@@ -81,7 +81,7 @@ class Bot:
     @staticmethod
     def game(bot, update):
         game_keyboard = Keyboard()
-        game_keyboard.add(Bot.Texts.START_A_GAME, CreateGameAction(), 1, 1)
+        game_keyboard.add(Bot.Texts.CREATE_A_GAME, CreateGameAction(), 1, 1)
         game_keyboard.add(Bot.Texts.LIST_GAMES, ListGamesAction(), 2, 1)
         update.message.reply_text(Bot.Texts.CHOOSE_ACTION, reply_markup=game_keyboard.create())
 
@@ -175,7 +175,7 @@ class Bot:
                     keyboard.add(Bot.Texts.WANT_TO_JOIN, action.set_phases([2]), 1, 1)
                 else:
                     keyboard.add(Bot.Texts.LEAVE_GAME, action.set_phases([5]), 1, 1)
-            update.callback_query.message.edit_text(str(game), reply_markup=keyboard.create())
+            update.callback_query.message.edit_text(game.long_str(), reply_markup=keyboard.create())
             return
 
         else:
@@ -187,7 +187,8 @@ class Bot:
         if action.get_phase() == 2:
             action.increase_phase()
             keyboard = YesNoKeyboard(action)
-            update.callback_query.message.edit_text(Bot.Texts.WANT_TO_JOIN, reply_markup=keyboard.create())
+            update.callback_query.message.edit_text(Bot.Texts.WANT_TO_JOIN + "\n" + game.long_str(),
+                                                    reply_markup=keyboard.create())
         elif action.get_phase() == 3:
             if action.callback_data:
                 game = game.join(user)
@@ -196,7 +197,8 @@ class Bot:
         elif action.get_phase() == 5:
             action.increase_phase()
             keyboard = YesNoKeyboard(action)
-            update.callback_query.message.edit_text(Bot.Texts.LEAVE_GAME, reply_markup=keyboard.create())
+            update.callback_query.message.edit_text(Bot.Texts.LEAVE_GAME + "\n" + game.long_str(),
+                                                    reply_markup=keyboard.create())
         elif action.get_phase() == 6:
             if action.callback_data:
                 game = game.leave(user)
@@ -210,27 +212,27 @@ class Bot:
             # Create the game
             game = Database.create_game()
             action.set_unfinished_game_id(game.id)
+            rw = RandomWords()
+            name = "#" + "".join([word.title() for word in rw.random_words(count=3)])
+            game.name = name
+            Database.save()
         game = Database.game_by_id(action.get_unfinished_game_id())
         if not game:
             return
         if old_phase == 2:
-            # Set name the game
-            game.name = action.callback_data
-            Database.save()
-        elif old_phase == 3:
             # Save the date
             now = date.today() + timedelta(days=action.callback_data)
             game.date = now
             Database.save()
-        elif old_phase == 4:
+        elif old_phase == 3:
             # Save hour
             game.date += timedelta(hours=action.callback_data)
             Database.save()
-        elif old_phase == 5:
+        elif old_phase == 4:
             # Save minutes
             game.date += timedelta(minutes=action.callback_data)
             Database.save()
-        elif old_phase == 6:
+        elif old_phase == 5:
             created_game = Game.create(game.name, game.date)
             self._inspect_game(bot, update, InspectGameAction().set_game_id(created_game.id))
             return
@@ -238,26 +240,20 @@ class Bot:
         new_phase = action.increase_phase()
 
         if new_phase == 2:
-            # Query a name
-            keyboard = Keyboard()
-            for i in range(3):
-                keyboard.add(Bot.Texts.RANDOM_JARGON + str(i), action.copy_with_callback_data("jargon" + str(i)), i, 1)
-            text = Bot.Texts.NAME_THE_GAME
-        elif new_phase == 3:
             # Query a date
             keyboard = Keyboard()
             days = ["Today", "Tomorrow", "+2", "+3", "+4", "+5"]
             for i in range(len(days)):
                 keyboard.add(days[i], action.copy_with_callback_data(i), 1, i)
             text = Bot.Texts.ENTER_DATE
-        elif new_phase == 4:
+        elif new_phase == 3:
             # Query hour
             keyboard = Keyboard()
             start = datetime.now().hour if game.date.date() == date.today() else 0
             for time in range(start, 24):
                 keyboard.add(str(time), action.copy_with_callback_data(time), int(time / 8) + 1, time % 8 + 1)
             text = Bot.Texts.ENTER_TIME
-        elif new_phase == 5:
+        elif new_phase == 4:
             # Query minutes
             keyboard = Keyboard()
             for time in range(4):
@@ -265,16 +261,16 @@ class Bot:
                 keyboard.add("{}:{}".format(str(hours).zfill(2), str(time * 15).zfill(2)),
                              action.copy_with_callback_data(time * 15), 1, time)
             text = Bot.Texts.ENTER_TIME
-        elif new_phase == 6:
+        elif new_phase == 5:
             # Confirm creation
             keyboard = Keyboard()
             keyboard.add(Bot.Texts.CREATE_GAME, action, 1, 1)
             keyboard.add(Bot.Texts.EDIT_GAME, CreateGameAction(), 2, 1)
-            text = "{} - {}".format(game.name, game.date)
+            text = "{}".format(game.date)
         else:
             Bot._nop(bot, update, action)
             return
-        update.callback_query.message.edit_text(text, reply_markup=keyboard.create())
+        update.callback_query.message.edit_text(game.name + " " + text, reply_markup=keyboard.create())
 
     def _list_games(self, bot, update, action):
         update.callback_query.message.edit_text(Bot.Texts.LOADING)
