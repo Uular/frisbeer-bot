@@ -4,7 +4,10 @@ from game import Game
 
 
 class GameCache(Cache):
+    def __init__(self):
+        super().__init__(Game, lambda game: game.id)
+
     def update(self, force=False):
         if not force and self.is_valid():
             return False
-        self.set_data(Game, lambda game: game.instance_id, API.get_games())
+        self.set_data(API.get_games())

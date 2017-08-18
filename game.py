@@ -22,8 +22,8 @@ class Game(Cacheable):
 
     _cache = None
 
-    def __init__(self, instance_id: int, name: str, date: datetime, state: State, players: List[Player]):
-        self.instance_id = instance_id
+    def __init__(self, id_: int, name: str, date: datetime, state: State, players: List[Player]):
+        self.id = id_
         self.name = name
         self.date = date
         self.state = state
@@ -49,7 +49,16 @@ class Game(Cacheable):
         return Game.from_json(API.create_game(name, date))
 
     def join(self, player: Player):
-        API.
+        return self.from_json(API.join_game(self.id, player.id))
+
+    def leave(self, player: Player):
+        return self.from_json(API.leave_game(self.id, player.id))
+
+    def is_in_game(self, player: Player):
+        for p in self.players:
+            if p.id == player.id:
+                return True
+        return False
 
     def __str__(self):
         return "{}".format(self.name)

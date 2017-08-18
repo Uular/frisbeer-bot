@@ -1,7 +1,7 @@
 import datetime
 
 import logging
-from typing import ValuesView, List, Callable, Union, Type, TypeVar, Generic
+from typing import ValuesView, List, Callable, Type, TypeVar, Generic
 
 from fuzzywuzzy import fuzz
 
@@ -17,22 +17,25 @@ K = TypeVar('K', str, int)
 
 
 class Cache(Generic[C]):
-    def __init__(self):
-        self.data_store = {}
-        self.timestamp = None
-
-    def set_data(self, cls: Type[C], key_accessor: Callable[[C], K], data: List[dict]):
+    def __init__(self, cls: Type[C], key_accessor: Callable[[C], K]):
         """
-        (re)build cache data from given input
-        
         :param cls: subclass of Cacheable
         :param key_accessor: Callable which accesses key from Cacheable
+        """
+        self.data_store = {}
+        self.timestamp = None
+        self.cls = cls
+        self.key_accessor = key_accessor
+
+    def set_data(self, data: List[dict]):
+        """
+        (re)build cache data from given input
         :param data: List of Dictionaries from which to build cache (ie. response.json() from API)
         :return: None
         """
         for entity in data:
-            obj = cls.from_json(entity)
-            key_val = key_accessor(obj)
+            obj = self.cls.from_json(entity)
+            key_val = self.key_accessor(obj)
             self.data_store[key_val] = obj
         self.timestamp = datetime.datetime.now()
 
@@ -97,3 +100,6 @@ class Cache(Generic[C]):
         :return: whether cache actually updated
         """
         raise NotImplemented("Implement in subclass")
+
+    def update_instance(self, instance: C):
+        self.data_store[self.key_accessor(instance)] = instance

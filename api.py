@@ -1,3 +1,4 @@
+
 import requests
 
 # api_url = "https://ranta.org/frisbeer/API/"
@@ -13,7 +14,7 @@ class APIError(Exception):
 
 class API:
     _default_headers = {
-        # 'content-type': 'application/json',
+        'content-type': 'application/json'
     }
 
     @staticmethod
@@ -41,7 +42,7 @@ class API:
     @staticmethod
     def _post(endpoint, payload):
         url = api_url + endpoint
-        response = requests.post(url, headers=API._default_headers, data=payload)
+        response = requests.post(url, headers=API._default_headers, json=payload)
         if not response.ok:
             raise APIError("Error in response. Status {}, message {}", response.status_code, response.content)
         try:
@@ -63,7 +64,11 @@ class API:
 
     @staticmethod
     def join_game(game_id, player_id):
-        pass
+        return API._post(games + str(game_id) + "/add_player/", payload={"id": player_id})
+
+    @staticmethod
+    def leave_game(game_id, player_id):
+        return API._post(games + str(game_id) + "/remove_player/", payload={"id": player_id})
 
     @staticmethod
     def get_games():

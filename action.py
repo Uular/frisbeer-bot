@@ -1,91 +1,134 @@
 import json
-from typing import List
+import uuid
+from enum import Enum
+from typing import Union
 
-import copy
+
+class ActionTypes(Enum):
+    ACTION = 0
+    CREATE_GAME = 1
+    LIST_GAMES = 3
+    JOIN_GAME = 4
+    GAME_MENU = 5
 
 
 class Action:
-    CREATE_GAME = 1
-    INSPECT_GAME = 2
-    INSPECT_PLAYER = 3
-    LIST_GAMES = 4
-    JOIN_GAME = 5
-    GAME_MENU = 6
+    _KEY_UUID = "u"
+    _KEY_CALLBACK_DATA = "c"
 
-    _ACTION = "a"
-    _RETURN_ACTION = "ra"
-    _PHASE = "p"
-    _NEXT_PHASE = "np"
-    _ID = "i"
-    _DATA = "d"
+    _TYPE = ActionTypes.ACTION
 
-    def __init__(self, action: int, phase: int = 1, next_phases: List[int] = None, id_=0, data="",
-                 ready_action=GAME_MENU):
-        if not next_phases:
-            next_phases = []
-        self.action = action
-        self.return_action = ready_action
-        self.phase = phase
-        self.next_phases = next_phases
-        self.id = id_
+    _ongoing = {}
+
+    def __init__(self, type_: ActionTypes = None, key=None, data=None, callback_data=None):
+        if key is None:
+            key = uuid.uuid4().int
+        if type_ is None:
+            type_ = self.__class__._TYPE
+        if data is None:
+            data = {}
         self._data = data
+        self.type = type_
+        self.key = key
+        self.callback_data = callback_data
+        Action._ongoing[key] = self
 
     @classmethod
-    def game_menu(cls):
-        return cls(Action.GAME_MENU)
-
-    @classmethod
-    def create_game(cls):
-        return cls(Action.CREATE_GAME)
-
-    @classmethod
-    def list_games(cls):
-        return cls(Action.LIST_GAMES)
-
-    @classmethod
-    def inspect_game(cls, instance_id):
-        return cls(Action.INSPECT_GAME, id_=instance_id)
-
-    @classmethod
-    def join_game(cls, instance_id):
-        return cls(Action.JOIN_GAME, id_=instance_id)
-
-    @classmethod
-    def parse(cls, json_data: str):
+    def from_json(cls, json_data: str):
         j = json.loads(json_data)
-        return Action(j[Action._ACTION],
-                      j[Action._PHASE],
-                      j[Action._NEXT_PHASE],
-                      j[Action._ID],
-                      j.get(Action._DATA, None))
-
-    def copy(self):
-        return Action(self.action, self.phase, copy.copy(self.next_phases), self.id, copy.copy(self._data))
-
-    def set_data(self, data: str):
-        """Add data with key to data store and returns self"""
-        self._data = data
-        return self
-
-    def get_data(self):
-        return self._data
-
-    def increase_phase(self):
-        if self.next_phases:
-            self.phase = self.next_phases.pop(0)
+        uid = j[Action._KEY_UUID]
+        action = Action._ongoing.get(uid, None)
+        if action is None:
+            return cls(key=j[Action._KEY_UUID], callback_data=j[Action._KEY_CALLBACK_DATA])
         else:
-            self.phase += 1
-        return self
+            return action.with_callback_data(j[Action._KEY_CALLBACK_DATA])
 
-    def add_phase(self, phase: int):
-        self.next_phases.append(phase)
+    @classmethod
+    def from_action(cls, action):
+        return cls(action.type, action.key, data=action._data, callback_data=action.callback_data)
 
     def __str__(self):
         d = {
-            Action._ACTION: self.action,
-            Action._PHASE: self.phase,
-            Action._NEXT_PHASE: self.next_phases,
-            Action._ID: self.id,
-            Action._DATA: self._data
+            Action._KEY_UUID: self.key,
+            Action._KEY_CALLBACK_DATA: self.callback_data
         }
         return json.dumps(d)
+
+    def copy_with_callback_data(self, data: Union[str, int, bool]):
+        copied = self.__class__.from_action(self)
+        copied.callback_data = data
+        return copied
+
+    def with_callback_data(self, data: Union[str, int, bool]):
+        self.callback_data = data
+        return self
+
+
+class PhasedAction(Action):
+    """
+    Action which stores next phases
+    """
+    _PHASE = "phase"
+
+    def increase_phase(self):
+        """
+        Increase phase and return new phase
+        
+        :return: new phase
+        """
+        phases = self._data.get(PhasedAction._PHASE, [1])
+        p = phases.pop(0)
+        if not phases:
+            phases = [p + 1]
+        self._data[PhasedAction._PHASE] = phases
+        return phases[0]
+
+    def get_phase(self):
+        return self._data.get(PhasedAction._PHASE, [1])[0]
+
+    def add_phase(self, phase: int):
+        phases = self._data.get(PhasedAction._PHASE, [])
+        phases.append(phase)
+        self._data[PhasedAction._PHASE] = phases
+
+    def set_phases(self, phases):
+        self._data[PhasedAction._PHASE] = phases
+        return self
+
+
+class GameAction(Action):
+    _TYPE = 1
+    """
+    Action which stores game id
+    """
+    _GAME_ID = "game_id"
+
+    def get_game_id(self) -> int:
+        return self._data.get(GameAction._GAME_ID, None)
+
+    def set_game_id(self, id_: int):
+        self._data[GameAction._GAME_ID] = id_
+        return self
+
+
+class CreateGameAction(GameAction, PhasedAction):
+    _TYPE = ActionTypes.CREATE_GAME
+    _UNFINISHED_GAME_ID = "unfinished_game_id"
+
+    def get_unfinished_game_id(self):
+        return self._data.get(CreateGameAction._UNFINISHED_GAME_ID, None)
+
+    def set_unfinished_game_id(self, id_:int):
+        self._data[CreateGameAction._UNFINISHED_GAME_ID] = id_
+
+
+class InspectGameAction(GameAction, PhasedAction):
+    _TYPE = ActionTypes.JOIN_GAME
+
+
+class ListGamesAction(Action):
+    _TYPE = ActionTypes.LIST_GAMES
+
+
+class GameMenuAction(Action):
+    _TYPE = ActionTypes.GAME_MENU
