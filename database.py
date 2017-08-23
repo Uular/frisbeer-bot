@@ -26,6 +26,7 @@ class Database:
         id = Column(Integer, primary_key=True)
         name = Column(String)
         date = Column(DateTime)
+        location = Column(Integer)
 
     Base.metadata.create_all(engine)
     Session = sessionmaker(bind=engine)

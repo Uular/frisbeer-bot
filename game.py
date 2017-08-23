@@ -4,6 +4,7 @@ from typing import List
 
 from api import API
 from cacheable import Cacheable
+from location import Location
 from player import Player
 
 
@@ -19,15 +20,16 @@ class Game(Cacheable):
     DATE = "date"
     STATE = "state"
     PLAYERS = "players"
+    LOCATION = "location"
+    LOCATION_REPR = "location_repr"
 
-    _cache = None
-
-    def __init__(self, id_: int, name: str, date: datetime, state: State, players: List[Player]):
+    def __init__(self, id_: int, name: str, date: datetime, state: State, players: List[Player], location: Location):
         self.id = id_
         self.name = name
         self.date = date
         self.state = state
         self.players = players
+        self.location = location
 
     @classmethod
     def from_json(cls, json_data: dict):
@@ -36,17 +38,20 @@ class Game(Cacheable):
                    json_data[Game.DATE],
                    Game.State(json_data[Game.STATE]),
                    [Player.from_json(data)
-                    for data in json_data[Game.PLAYERS]])
+                    for data in json_data[Game.PLAYERS]],
+                   Location.from_json(json_data[Game.LOCATION_REPR]) if json_data[Game.LOCATION] is not None else None,
+                   )
 
     @staticmethod
-    def create(name: str, date: datetime):
+    def create(name: str, date: datetime, location: int):
         """
         Create a game in frisbeer backend
         :param name: Name of the game
         :param date: Data and time of the game
+        :param location: id of the location
         :return: Game object representing the game
         """
-        return Game.from_json(API.create_game(name, date))
+        return Game.from_json(API.create_game(name, date, location))
 
     def join(self, player: Player):
         return self.from_json(API.join_game(self.id, player.id))
@@ -64,6 +69,6 @@ class Game(Cacheable):
         return "{}".format(self.name)
 
     def long_str(self):
-        return "{}\n{}\n{}/6\n{}".format(self.name, self.date,
-                                         len(self.players) if self.players else 0,
-                                         ", ".join([p.nick for p in self.players]))
+        return "{}\n{}\n{}\n{}/6\n{}".format(self.name, self.date, self.location,
+                                             len(self.players) if self.players else 0,
+                                             ", ".join([p.nick for p in self.players]))

@@ -4,6 +4,7 @@ import logging
 
 import telegram
 from random_words import RandomWords
+from telegram import Message
 from telegram.ext import Updater, CommandHandler, CallbackQueryHandler
 
 from action import Action, CreateGameAction, ListGamesAction, ActionTypes, GameMenuAction, \
@@ -14,6 +15,7 @@ from database import Database
 from game import Game
 from gamecache import GameCache
 from keyboard import Keyboard, YesNoKeyboard
+from locationcache import LocationCache
 from playercache import PlayerCache
 
 
@@ -25,6 +27,7 @@ class Bot:
         LIST_GAMES = "List games"
         ENTER_DATE = "Give a date"
         ENTER_TIME = "Give a time"
+        ENTER_LOCATION = "Give a location"
         WANT_TO_JOIN = "Join game"
         CREATE_GAME = "Create game"
         EDIT_GAME = "Edit game"
@@ -38,10 +41,11 @@ class Bot:
         self.updater = Updater(api_key)
 
         self.updater.dispatcher.add_handler(CommandHandler('start', self.greet))
-        self.updater.dispatcher.add_handler(CommandHandler('game', self.game))
-        self.updater.dispatcher.add_handler(CommandHandler('rank', self.rank))
-        self.updater.dispatcher.add_handler(CommandHandler('register', self.register))
-        self.updater.dispatcher.add_handler(CallbackQueryHandler(self.callback))
+        self.updater.dispatcher.add_handler(CommandHandler('game', self._game))
+        self.updater.dispatcher.add_handler(CommandHandler('rank', self._rank))
+        self.updater.dispatcher.add_handler(CommandHandler('register', self._register))
+        self.updater.dispatcher.add_handler(CommandHandler('location', self._location))
+        self.updater.dispatcher.add_handler(CallbackQueryHandler(self._callback))
 
         self.actions = {
             ActionTypes.CREATE_GAME: self._create_game,
@@ -50,13 +54,15 @@ class Bot:
             ActionTypes.GAME_MENU: self._game_menu,
         }
 
-        API.login("", "")
+        API.login("admin", "adminpassu")
         self.game_cache = GameCache()
         self.game_cache.update()
         self.player_cache = PlayerCache()
         self.player_cache.update()
+        self.location_cache = LocationCache()
+        self.location_cache.update()
 
-    def callback(self, bot, update):
+    def _callback(self, bot, update):
         query = update.callback_query
         logging.info("Callback with data {}".format(query.data))
         action = Action.from_json(query.data)
@@ -67,25 +73,25 @@ class Bot:
         self.updater.start_polling()
         self.updater.idle()
 
+    def _game_menu(self, bot, update, action):
+        self._present_game_menu(update.callback_query.message)
+
     @staticmethod
-    def _game_menu(bot, update, action):
+    def _present_game_menu(message: Message):
         game_keyboard = Keyboard()
         game_keyboard.add(Bot.Texts.CREATE_A_GAME, CreateGameAction(), 1, 1)
         game_keyboard.add(Bot.Texts.LIST_GAMES, ListGamesAction(), 2, 1)
-        update.callback_query.message.edit_text(Bot.Texts.CHOOSE_ACTION, reply_markup=game_keyboard.create())
+        message.reply_text(Bot.Texts.CHOOSE_ACTION, reply_markup=game_keyboard.create())
 
     @staticmethod
     def greet(bot, update):
         update.message.reply_text('Lets play frisbeer!\n Start with /game')
 
     @staticmethod
-    def game(bot, update):
-        game_keyboard = Keyboard()
-        game_keyboard.add(Bot.Texts.CREATE_A_GAME, CreateGameAction(), 1, 1)
-        game_keyboard.add(Bot.Texts.LIST_GAMES, ListGamesAction(), 2, 1)
-        update.message.reply_text(Bot.Texts.CHOOSE_ACTION, reply_markup=game_keyboard.create())
+    def _game(bot, update):
+        Bot._present_game_menu(update.message)
 
-    def register(self, bot, update):
+    def _register(self, bot, update):
         logging.info("Registering nick")
         logging.debug(update.message.text)
         logging.debug(update.message.from_user.username)
@@ -118,7 +124,7 @@ class Bot:
             reply("Updated nick to {}".format(frisbeer_nick))
         Database.save()
 
-    def rank(self, bot, update):
+    def _rank(self, bot, update):
         usage = "Usage: /rank <frisbeer nick | telegram username> \n" \
                 "or register your frisbeer nick with /register <frisbeer nick>"
         reply = update.message.reply_text
@@ -145,9 +151,9 @@ class Bot:
             player = self.player_cache.get(nick)
         except NotFoundError:
             player = self.player_cache.fuzzy_get(nick)
-        if player.rank:
+        if player._rank:
             reply('{} - score: {}, rank {} <a href="{}">&#8203;</a>'
-                  .format(player.nick, player.score, player.rank.name, player.rank.image_url),
+                  .format(player.nick, player.score, player._rank.name, player._rank.image_url),
                   parse_mode=telegram.ParseMode.HTML)
         else:
             reply('{} - score {}'.format(player.nick, player.score))
@@ -233,7 +239,10 @@ class Bot:
             game.date += timedelta(minutes=action.callback_data)
             Database.save()
         elif old_phase == 5:
-            created_game = Game.create(game.name, game.date)
+            game.location = action.callback_data
+            Database.save()
+        elif old_phase == 6:
+            created_game = Game.create(game.name, game.date, game.location)
             self._inspect_game(bot, update, InspectGameAction().set_game_id(created_game.id))
             return
 
@@ -262,11 +271,18 @@ class Bot:
                              action.copy_with_callback_data(time * 15), 1, time)
             text = Bot.Texts.ENTER_TIME
         elif new_phase == 5:
+            keyboard = Keyboard()
+            i = 0
+            for location in self.location_cache.get_all():
+                keyboard.add("{}".format(location.name), action.copy_with_callback_data(location.id), i, 1)
+                i += 1
+            text = Bot.Texts.ENTER_LOCATION
+        elif new_phase == 6:
             # Confirm creation
             keyboard = Keyboard()
             keyboard.add(Bot.Texts.CREATE_GAME, action, 1, 1)
             keyboard.add(Bot.Texts.EDIT_GAME, CreateGameAction(), 2, 1)
-            text = "{}".format(game.date)
+            text = "{} {}".format(game.date, self.location_cache.get(game.location))
         else:
             Bot._nop(bot, update, action)
             return
@@ -290,6 +306,18 @@ class Bot:
             keyboard.add(Bot.Texts.CREATE_GAME, CreateGameAction(), 0, 1)
         keyboard.add(Bot.Texts.BACK, GameMenuAction(), len(games), 2)
         update.callback_query.message.edit_text(text, reply_markup=keyboard.create())
+
+    def _location(self, bot, update, action):
+        logging.info("Adding location")
+        logging.debug(update.message.text)
+        logging.debug(update.message.from_user.username)
+        reply = update.message.reply_text
+
+        try:
+            location = update.message.text.split("location ", 1)[1]
+        except IndexError:
+            reply("Usage: /location name [longitude latitude]")
+            return
 
     @staticmethod
     def _nop(bot, update, action):

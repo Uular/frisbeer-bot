@@ -7,7 +7,6 @@ class Player(Cacheable):
     NICK = "name"
     RANK = "rank"
     SCORE = "score"
-    _cache = None
 
     def __init__(self, id_: int, nick: str, rank: Rank, score: int):
         self.id = id_

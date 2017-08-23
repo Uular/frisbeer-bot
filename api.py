@@ -1,11 +1,11 @@
-
 import requests
 
 # api_url = "https://ranta.org/frisbeer/API/"
-# api_url = "http://localhost:8000/API/"
-api_url = "https://t3mu.kapsi.fi/frisbeer/API/"
+api_url = "http://localhost:8000/API/"
+# api_url = "https://t3mu.kapsi.fi/frisbeer/API/"
 players = "players/"
 games = "games/"
+locations = "locations/"
 
 
 class APIError(Exception):
@@ -55,10 +55,11 @@ class API:
         return API._get(players)
 
     @staticmethod
-    def create_game(name, date):
+    def create_game(name: str, date, location: int):
         payload = {
             "name": name,
-            "date": date.isoformat()
+            "date": date.isoformat(),
+            "location": location,
         }
         return API._post(games, payload)
 
@@ -73,3 +74,7 @@ class API:
     @staticmethod
     def get_games():
         return API._get(games)
+
+    @staticmethod
+    def get_locations():
+        return API._get(locations)
