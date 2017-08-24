@@ -15,6 +15,7 @@ from database import Database
 from game import Game
 from gamecache import GameCache
 from keyboard import Keyboard, YesNoKeyboard
+from location import Location
 from locationcache import LocationCache
 from player import Player
 from playercache import PlayerCache
@@ -146,7 +147,7 @@ class Bot:
         else:
             reply('{} - score {}'.format(player.nick, player.score))
 
-    def location(self, bot, update, action):
+    def location(self, bot, update):
         logging.info("Adding location")
         usage = "Usage: /location name [;longitude;latitude]"
         logging.debug(update.message.text)
@@ -161,14 +162,16 @@ class Bot:
         if not location:
             reply(usage)
             return
-        l = location.rsplit(";", 1)
+        l = location.rsplit(";", 2)
         if len(l) == 1:
-            pass
+            created = Location.create(l[0])
         elif len(l) == 3:
-            pass
+            created = Location.create(l[0], float(l[1]), float(l[2]))
         else:
             reply(usage)
             return
+        self.location_cache.update_instance(created)
+        reply("Created location {}".format(created.name))
 
     def callback(self, bot, update):
         query = update.callback_query
@@ -280,6 +283,7 @@ class Bot:
             Database.save()
         elif old_phase == 6:
             created_game = Game.create(game.name, game.date, game.location)
+            self.game_cache.update_instance(created_game)
             self._inspect_game(bot, message, update, InspectGameAction().set_game_id(created_game.id))
             return
 

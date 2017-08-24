@@ -24,7 +24,7 @@ class Location(Cacheable):
         )
 
     @staticmethod
-    def create(name: str, longitude: float = None, latitude:float = None)->'Location':
+    def create(name: str, longitude: float = None, latitude: float = None) -> 'Location':
         return Location.from_json(API.create_location(name, longitude, latitude))
 
     def __str__(self):
