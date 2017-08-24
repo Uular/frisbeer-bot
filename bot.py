@@ -1,4 +1,4 @@
-from datetime import datetime, date, timedelta
+from datetime import datetime, timedelta
 
 import logging
 
@@ -147,14 +147,26 @@ class Bot:
 
     def location(self, bot, update, action):
         logging.info("Adding location")
+        usage = "Usage: /location name [;longitude;latitude]"
         logging.debug(update.message.text)
         logging.debug(update.message.from_user.username)
         reply = update.message.reply_text
 
         try:
-            location = update.message.text.split("location ", 1)[1]
+            location = update.message.text.split("location ", 1)[1].strip()
         except IndexError:
-            reply("Usage: /location name [longitude latitude]")
+            reply(usage)
+            return
+        if not location:
+            reply(usage)
+            return
+        l = location.rsplit(";", 1)
+        if len(l) == 1:
+            pass
+        elif len(l) == 3:
+            pass
+        else:
+            reply(usage)
             return
 
     def callback(self, bot, update):

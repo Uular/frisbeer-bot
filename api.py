@@ -2,6 +2,7 @@ import requests
 
 # api_url = "https://ranta.org/frisbeer/API/"
 # api_url = "http://localhost:8000/API/"
+
 api_url = "https://t3mu.kapsi.fi/frisbeer/API/"
 players = "players/"
 games = "games/"
@@ -78,3 +79,7 @@ class API:
     @staticmethod
     def get_locations():
         return API._get(locations)
+
+    @staticmethod
+    def create_location(name: str, longitude: float, latitude: float) -> dict:
+        return API._post(locations, {"name": name, "longitude": longitude, "latitude": latitude})
