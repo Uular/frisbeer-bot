@@ -103,3 +103,6 @@ class Cache(Generic[C]):
 
     def update_instance(self, instance: C):
         self.data_store[self.key_accessor(instance)] = instance
+
+    def delete_instance(self, instance: C):
+        self.data_store.pop(self.key_accessor(instance))

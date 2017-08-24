@@ -52,6 +52,10 @@ class API:
             raise APIError(e)
 
     @staticmethod
+    def _delete(endpoint: str, id_: int):
+        return requests.delete(api_url + endpoint + str(id_) + "/", headers=API._default_headers)
+
+    @staticmethod
     def get_players():
         return API._get(players)
 
@@ -63,6 +67,10 @@ class API:
             "location": location,
         }
         return API._post(games, payload)
+
+    @staticmethod
+    def delete_game(id_: int):
+        API._delete(games, id_)
 
     @staticmethod
     def join_game(game_id, player_id):

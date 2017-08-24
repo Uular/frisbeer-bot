@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, date, timedelta
 
 import logging
 
@@ -8,7 +8,7 @@ from telegram import Message, Update
 from telegram.ext import Updater, CommandHandler, CallbackQueryHandler
 
 from action import Action, CreateGameAction, ListGamesAction, ActionTypes, GameMenuAction, \
-    InspectGameAction
+    InspectGameAction, DeleteGameAction
 from api import API
 from cache import NotFoundError
 from database import Database
@@ -36,7 +36,7 @@ class Bot:
         NO_UPCOMING_GAMES = "No upcoming games"
         BACK = "Back"
         LEAVE_GAME = "Leave game"
-        RANDOM_JARGON = "jargon"
+        DELETE_GAME = "Delete game"
 
     def __init__(self, api_key):
         self.updater = Updater(api_key)
@@ -53,6 +53,7 @@ class Bot:
             ActionTypes.LIST_GAMES: self._list_games,
             ActionTypes.JOIN_GAME: self._inspect_game,
             ActionTypes.GAME_MENU: self._game_menu,
+            ActionTypes.DELETE_GAME: self._delete_game,
         }
 
         API.login("admin", "adminpassu")
@@ -194,17 +195,17 @@ class Bot:
     def _inspect_game(self, bot, message: Message, update: Update, action: InspectGameAction):
         logging.info("Inspecting game {}".format(action.get_game_id()))
         keyboard = Keyboard()
-        keyboard.add(Bot.Texts.BACK, ListGamesAction(), 1, 2)
+        keyboard.add(Bot.Texts.BACK, ListGamesAction(), 10, 1)
         message.edit_text("Loading...", reply_markup=keyboard.create())
         game_id = action.get_game_id()
         if not game_id:
             logging.warning("No instance id in join action")
-            return self._nop(bot, message, action)
+            return self._nop(bot, message, update, action)
         try:
             game = self.game_cache.get(game_id)
         except NotFoundError:
             logging.warning("Game with id {} not found", game_id)
-            self._nop(bot, message, action)
+            self._nop(bot, message, update, action)
             return
 
         user = self.get_player(update)
@@ -212,6 +213,8 @@ class Bot:
             if user:
                 if not game.is_in_game(user):
                     keyboard.add(Bot.Texts.WANT_TO_JOIN, action.set_phases([2]), 1, 1)
+                    if not game.players:
+                        keyboard.add(Bot.Texts.DELETE_GAME, DeleteGameAction().set_game_id(game.id), 2, 1)
                 else:
                     keyboard.add(Bot.Texts.LEAVE_GAME, action.set_phases([5]), 1, 1)
             message.edit_text(game.long_str(), reply_markup=keyboard.create())
@@ -242,7 +245,7 @@ class Bot:
             if action.callback_data:
                 game = game.leave(user)
                 self.game_cache.update_instance(game)
-            self._inspect_game(bot, message, action.set_phases([1]))
+            self._inspect_game(bot, message, update, action.set_phases([1]))
 
     def _create_game(self, bot, message: Message, update: Update, action):
         action = CreateGameAction.from_action(action)
@@ -344,6 +347,23 @@ class Bot:
             keyboard.add(Bot.Texts.CREATE_GAME, CreateGameAction(), 0, 1)
         keyboard.add(Bot.Texts.BACK, GameMenuAction(), len(games), 2)
         update.callback_query.message.edit_text(text, reply_markup=keyboard.create())
+
+    def _delete_game(self, bot, message: Message, update: Update, action: DeleteGameAction):
+        game = self.game_cache.get(action.get_game_id())
+        if not game:
+            self._nop(bot, message, update, action)
+            return
+        if action.get_phase() == 1:
+            action.increase_phase()
+            keyboard = YesNoKeyboard(action)
+            message.edit_text("Delete game {}".format(game.name), reply_markup=keyboard.create())
+        elif action.get_phase() == 2:
+            if action.callback_data:
+                game.delete()
+                self.game_cache.delete_instance(game)
+                self._list_games(bot, message, update, ListGamesAction())
+            else:
+                self._inspect_game(bot, message, update, InspectGameAction().set_game_id(game.id))
 
     def _nop(self, bot, message: Message, update: Update, action: Action):
         logging.info("Nop")

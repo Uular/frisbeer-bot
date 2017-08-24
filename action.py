@@ -10,6 +10,7 @@ class ActionTypes(Enum):
     LIST_GAMES = 3
     JOIN_GAME = 4
     GAME_MENU = 5
+    DELETE_GAME = 6
 
 
 class Action:
@@ -132,3 +133,8 @@ class ListGamesAction(Action):
 
 class GameMenuAction(Action):
     _TYPE = ActionTypes.GAME_MENU
+
+
+class DeleteGameAction(GameAction, PhasedAction):
+    _TYPE = ActionTypes.DELETE_GAME
+

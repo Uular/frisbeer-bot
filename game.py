@@ -53,6 +53,9 @@ class Game(Cacheable):
         """
         return Game.from_json(API.create_game(name, date, location))
 
+    def delete(self):
+        API.delete_game(self.id)
+
     def join(self, player: Player):
         return self.from_json(API.join_game(self.id, player.id))
 
