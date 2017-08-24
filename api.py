@@ -1,8 +1,8 @@
 import requests
 
 # api_url = "https://ranta.org/frisbeer/API/"
-api_url = "http://localhost:8000/API/"
-# api_url = "https://t3mu.kapsi.fi/frisbeer/API/"
+# api_url = "http://localhost:8000/API/"
+api_url = "https://t3mu.kapsi.fi/frisbeer/API/"
 players = "players/"
 games = "games/"
 locations = "locations/"

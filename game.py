@@ -35,7 +35,7 @@ class Game(Cacheable):
     def from_json(cls, json_data: dict):
         return cls(json_data[Game.ID],
                    json_data[Game.NAME],
-                   json_data[Game.DATE],
+                   datetime.strptime(json_data[Game.DATE], "%Y-%m-%dT%H:%M:%SZ"),
                    Game.State(json_data[Game.STATE]),
                    [Player.from_json(data)
                     for data in json_data[Game.PLAYERS]],
