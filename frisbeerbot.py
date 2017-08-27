@@ -4,41 +4,24 @@ import logging
 
 import telegram
 from random_words import RandomWords
-from telegram import Message, Update
+from telegram import Message, Update, Bot
 from telegram.ext import Updater, CommandHandler, CallbackQueryHandler
 
-from action import Action, CreateGameAction, ListGamesAction, ActionTypes, GameMenuAction, \
-    InspectGameAction, DeleteGameAction
+from action import Action, CreateGameAction, ActionTypes, \
+    InspectGameAction, ActionBuilder
 from api import API
 from cache import NotFoundError
 from database import Database
 from game import Game
 from gamecache import GameCache
-from keyboard import Keyboard, YesNoKeyboard
+from keyboard import Keyboard
 from location import Location
 from locationcache import LocationCache
-from player import Player
 from playercache import PlayerCache
+from texts import Texts
 
 
-class Bot:
-    class Texts:
-        LOADING = "Loading..."
-        CHOOSE_ACTION = "Choose action"
-        CREATE_A_GAME = "Create a new game"
-        LIST_GAMES = "List games"
-        ENTER_DATE = "Give a date"
-        ENTER_TIME = "Give a time"
-        ENTER_LOCATION = "Give a location"
-        WANT_TO_JOIN = "Join game"
-        CREATE_GAME = "Create game"
-        EDIT_GAME = "Edit game"
-        UPCOMING_GAMES = "Upcoming games"
-        NO_UPCOMING_GAMES = "No upcoming games"
-        BACK = "Back"
-        LEAVE_GAME = "Leave game"
-        DELETE_GAME = "Delete game"
-
+class FrisbeerBot:
     def __init__(self, api_key):
         self.updater = Updater(api_key)
 
@@ -48,14 +31,6 @@ class Bot:
         self.updater.dispatcher.add_handler(CommandHandler('register', self.register))
         self.updater.dispatcher.add_handler(CommandHandler('location', self.location))
         self.updater.dispatcher.add_handler(CallbackQueryHandler(self.callback))
-
-        self.actions = {
-            ActionTypes.CREATE_GAME: self._create_game,
-            ActionTypes.LIST_GAMES: self._list_games,
-            ActionTypes.JOIN_GAME: self._inspect_game,
-            ActionTypes.GAME_MENU: self._game_menu,
-            ActionTypes.DELETE_GAME: self._delete_game,
-        }
 
         API.login("admin", "adminpassu")
         self.game_cache = GameCache()
@@ -69,13 +44,20 @@ class Bot:
         self.updater.start_polling()
         self.updater.idle()
 
+    def callback(self, bot: Bot, update: Update):
+        query = update.callback_query
+        logging.info("Callback with data {}".format(query.data))
+        action = ActionBuilder.from_callback_data(query.data)
+        # logging.info("Action type is {}".format(ActionTypes(action.type)))
+        action.run_callback(update, self.game_cache, self.player_cache, self.location_cache)
+
     def greet(self, bot, update):
         update.message.reply_text('Lets play frisbeer!\n Start with /game')
 
     def game(self, bot, update):
         name = update.message.text.split("/game")[1].strip()
         if not name:
-            Bot._present_game_menu(update.message)
+            FrisbeerBot._present_game_menu(update.message)
         else:
             message = update.message.reply_text("Creating a game")
             self._create_game(bot, message, update, CreateGameAction().with_callback_data(name))
@@ -173,13 +155,6 @@ class Bot:
         self.location_cache.update_instance(created)
         reply("Created location {}".format(created.name))
 
-    def callback(self, bot, update):
-        query = update.callback_query
-        logging.info("Callback with data {}".format(query.data))
-        action = Action.from_json(query.data)
-        logging.info("Action type is {}".format(ActionTypes(action.type)))
-        self.actions.get(action.type, self._nop)(bot, update.callback_query.message, update, action)
-
     @staticmethod
     def _present_game_menu(message: Message):
         """
@@ -188,67 +163,14 @@ class Bot:
         :return: None
         """
         game_keyboard = Keyboard()
-        game_keyboard.add(Bot.Texts.CREATE_A_GAME, CreateGameAction(), 1, 1)
-        game_keyboard.add(Bot.Texts.LIST_GAMES, ListGamesAction(), 2, 1)
-        message.reply_text(Bot.Texts.CHOOSE_ACTION, reply_markup=game_keyboard.create())
+        game_keyboard.add(Texts.CREATE_A_GAME,
+                          ActionBuilder.action_as_callback_data(ActionTypes.CREATE_GAME), 1, 1)
+        game_keyboard.add(Texts.LIST_GAMES,
+                          ActionBuilder.action_as_callback_data(ActionTypes.LIST_GAMES), 2, 1)
+        message.reply_text(Texts.CHOOSE_ACTION, reply_markup=game_keyboard.create())
 
     def _game_menu(self, bot, message: Message, update: Update, action: Action):
         self._present_game_menu(message)
-
-    def _inspect_game(self, bot, message: Message, update: Update, action: InspectGameAction):
-        logging.info("Inspecting game {}".format(action.get_game_id()))
-        keyboard = Keyboard()
-        keyboard.add(Bot.Texts.BACK, ListGamesAction(), 10, 1)
-        message.edit_text("Loading...", reply_markup=keyboard.create())
-        game_id = action.get_game_id()
-        if not game_id:
-            logging.warning("No instance id in join action")
-            return self._nop(bot, message, update, action)
-        try:
-            game = self.game_cache.get(game_id)
-        except NotFoundError:
-            logging.warning("Game with id {} not found", game_id)
-            self._nop(bot, message, update, action)
-            return
-
-        user = self.get_player(update)
-        if action.get_phase() == 1:
-            if user:
-                if not game.is_in_game(user):
-                    keyboard.add(Bot.Texts.WANT_TO_JOIN, action.set_phases([2]), 1, 1)
-                    if not game.players:
-                        keyboard.add(Bot.Texts.DELETE_GAME, DeleteGameAction().set_game_id(game.id), 2, 1)
-                else:
-                    keyboard.add(Bot.Texts.LEAVE_GAME, action.set_phases([5]), 1, 1)
-            message.edit_text(game.long_str(), reply_markup=keyboard.create())
-            return
-
-        else:
-            if not user:
-                logging.info("User not registered")
-                update.callback_query.message.reply_text("Please register first using /register <frisbeer nick>")
-                update.callback_query.answer()
-                return
-        if action.get_phase() == 2:
-            action.increase_phase()
-            keyboard = YesNoKeyboard(action)
-            update.callback_query.message.edit_text(Bot.Texts.WANT_TO_JOIN + "\n" + game.long_str(),
-                                                    reply_markup=keyboard.create())
-        elif action.get_phase() == 3:
-            if action.callback_data:
-                game = game.join(user)
-                self.game_cache.update_instance(game)
-            self._inspect_game(bot, message, update, action.set_phases([1]))
-        elif action.get_phase() == 5:
-            action.increase_phase()
-            keyboard = YesNoKeyboard(action)
-            update.callback_query.message.edit_text(Bot.Texts.LEAVE_GAME + "\n" + game.long_str(),
-                                                    reply_markup=keyboard.create())
-        elif action.get_phase() == 6:
-            if action.callback_data:
-                game = game.leave(user)
-                self.game_cache.update_instance(game)
-            self._inspect_game(bot, message, update, action.set_phases([1]))
 
     def _create_game(self, bot, message: Message, update: Update, action):
         action = CreateGameAction.from_action(action)
@@ -329,64 +251,7 @@ class Bot:
             return
         message.edit_text(game.name + " " + text, reply_markup=keyboard.create())
 
-    def _list_games(self, bot, message: Message, update: Update, action: Action):
-        update.callback_query.message.edit_text(Bot.Texts.LOADING)
-        games = self.game_cache.filter(lambda game: game.state in [Game.State.PENDING, Game.State.READY])
-        games = sorted(games, key=lambda game: game.date)
-        keyboard = Keyboard()
-        text = Bot.Texts.UPCOMING_GAMES if games else Bot.Texts.NO_UPCOMING_GAMES
-        user = self.get_player(update)
-        for i in range(len(games)):
-            game = games[i]
-            keyboard.add("{} {}/6 {}".format(game.date.strftime("%a %d. %b %H:%M"),
-                                             len(game.players),
-                                             game.name),
-                         InspectGameAction().set_game_id(game.id), i, 1)
-            if user:
-                if not game.is_in_game(user):
-                    keyboard.add(Bot.Texts.WANT_TO_JOIN, InspectGameAction().set_game_id(game.id).set_phases([2]), i, 2)
-                else:
-                    keyboard.add(Bot.Texts.LEAVE_GAME, InspectGameAction().set_game_id(game.id).set_phases([5]), i, 2)
-        if not games:
-            keyboard.add(Bot.Texts.CREATE_GAME, CreateGameAction(), 0, 1)
-        keyboard.add(Bot.Texts.BACK, GameMenuAction(), len(games), 2)
-        update.callback_query.message.edit_text(text, reply_markup=keyboard.create())
-
-    def _delete_game(self, bot, message: Message, update: Update, action: DeleteGameAction):
-        game = self.game_cache.get(action.get_game_id())
-        if not game:
-            self._nop(bot, message, update, action)
-            return
-        if action.get_phase() == 1:
-            action.increase_phase()
-            keyboard = YesNoKeyboard(action)
-            message.edit_text("Delete game {}".format(game.name), reply_markup=keyboard.create())
-        elif action.get_phase() == 2:
-            if action.callback_data:
-                game.delete()
-                self.game_cache.delete_instance(game)
-                self._list_games(bot, message, update, ListGamesAction())
-            else:
-                self._inspect_game(bot, message, update, InspectGameAction().set_game_id(game.id))
-
     def _nop(self, bot, message: Message, update: Update, action: Action):
         logging.info("Nop")
         if update.callback_query:
             update.callback_query.answer()
-
-    def get_player(self, update) -> Player:
-        """
-        Get frisbeer user from update telegram user
-        :param update: telegram update object
-        :return: User from cache from None
-        """
-        telegram_user_id = update.effective_user.id
-        registered_user = Database.user_by_telegram_id(telegram_user_id)
-
-        if registered_user:
-            user = self.player_cache.filter(lambda player: player.id == registered_user.frisbeer_id)
-            if len(user) > 1:
-                logging.warning("Got more than one user back from registered users")
-                update.callback_query.answer()
-                return
-            return user[0]

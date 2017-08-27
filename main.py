@@ -1,16 +1,7 @@
-import json
 import logging
 import sys
 
-from sqlalchemy.orm import sessionmaker
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup
-from sqlalchemy import create_engine, Column, Integer, String
-from sqlalchemy.ext.declarative import declarative_base
-
-from bot import Bot
-from game import Game
-from player import Player
-from action import Action
+from frisbeerbot import FrisbeerBot
 
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 
@@ -100,5 +91,5 @@ def rank(bot, update):
     reply(str(player))
 """
 
-bot = Bot(sys.argv[1])
+bot = FrisbeerBot(sys.argv[1])
 bot.start()

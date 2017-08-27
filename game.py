@@ -68,6 +68,9 @@ class Game(Cacheable):
                 return True
         return False
 
+    def create_teams(self):
+        return self.from_json(API.create_teams(self.id))
+
     def __str__(self):
         return "{}".format(self.name)
 
@@ -75,3 +78,14 @@ class Game(Cacheable):
         return "{}\n{}\n{}\n{}/6\n{}".format(self.name, self.date, self.location,
                                              len(self.players) if self.players else 0,
                                              ", ".join([p.nick for p in self.players]))
+
+    @property
+    def team1(self):
+        return [player for player in self.players if player.team == 1]
+
+    @property
+    def team2(self):
+        return [player for player in self.players if player.team == 2]
+
+    def submit_score(self, team1_score, team2_score) -> 'Game':
+        return self.from_json(API.submit_score(self.id, team1_score, team2_score))

@@ -24,7 +24,7 @@ class API:
             "username": username,
             "password": password
         }
-        pl = API._post("token-auth/", payload)
+        pl = API._post("token-auth/", payload=payload)
         API._default_headers["Authorization"] = "Token " + pl["token"]
 
     @staticmethod
@@ -41,8 +41,10 @@ class API:
             raise APIError(e)
 
     @staticmethod
-    def _post(endpoint, payload):
+    def _post(endpoint, id_: int = None, payload=None):
         url = api_url + endpoint
+        if id_:
+            url += str(id_)
         response = requests.post(url, headers=API._default_headers, json=payload)
         if not response.ok:
             raise APIError("Error in response. Status {}, message {}", response.status_code, response.content)
@@ -56,6 +58,19 @@ class API:
         return requests.delete(api_url + endpoint + str(id_) + "/", headers=API._default_headers)
 
     @staticmethod
+    def _patch(endpoint: str, id_: int = None, payload=None):
+        url = api_url + endpoint
+        if id_:
+            url += str(id_) + "/"
+        response = requests.patch(url, headers=API._default_headers, json=payload)
+        if not response.ok:
+            raise APIError("Error in response. Status {}, message {}", response.status_code, response.content)
+        try:
+            return response.json()
+        except ValueError as e:
+            raise APIError(e)
+
+    @staticmethod
     def get_players():
         return API._get(players)
 
@@ -66,7 +81,7 @@ class API:
             "date": date.isoformat(),
             "location": location,
         }
-        return API._post(games, payload)
+        return API._post(games, payload=payload)
 
     @staticmethod
     def delete_game(id_: int):
@@ -81,6 +96,10 @@ class API:
         return API._post(games + str(game_id) + "/remove_player/", payload={"id": player_id})
 
     @staticmethod
+    def create_teams(game_id):
+        return API._post(games + str(game_id) + "/create_teams/")
+
+    @staticmethod
     def get_games():
         return API._get(games)
 
@@ -90,4 +109,8 @@ class API:
 
     @staticmethod
     def create_location(name: str, longitude: float, latitude: float) -> dict:
-        return API._post(locations, {"name": name, "longitude": longitude, "latitude": latitude})
+        return API._post(locations, payload={"name": name, "longitude": longitude, "latitude": latitude})
+
+    @staticmethod
+    def submit_score(id_, team1_score, team2_score):
+        return API._patch(games, id_=id_, payload={"team1_score": team1_score, "team2_score": team2_score, "state": 3})

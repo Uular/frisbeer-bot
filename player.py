@@ -8,11 +8,12 @@ class Player(Cacheable):
     RANK = "rank"
     SCORE = "score"
 
-    def __init__(self, id_: int, nick: str, rank: Rank, score: int):
+    def __init__(self, id_: int, nick: str, rank: Rank, score: int, team=None):
         self.id = id_
         self.nick = nick
         self.rank = rank
         self.score = score
+        self.team = team
 
     @classmethod
     def from_json(cls, json_data):
@@ -20,7 +21,8 @@ class Player(Cacheable):
             json_data[Player.ID],
             json_data[Player.NICK],
             Rank.from_json(json_data[Player.RANK]),
-            json_data[Player.SCORE]
+            json_data[Player.SCORE],
+            json_data.get("team", None)
         )
 
     def __str__(self):
