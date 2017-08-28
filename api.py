@@ -113,4 +113,4 @@ class API:
 
     @staticmethod
     def submit_score(id_, team1_score, team2_score):
-        return API._patch(games, id_=id_, payload={"team1_score": team1_score, "team2_score": team2_score, "state": 3})
+        return API._patch(games, id_=id_, payload={"team1_score": team1_score, "team2_score": team2_score, "state": 2})

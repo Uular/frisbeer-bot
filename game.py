@@ -22,14 +22,19 @@ class Game(Cacheable):
     PLAYERS = "players"
     LOCATION = "location"
     LOCATION_REPR = "location_repr"
+    TEAM_1_SCORE = "team1_score"
+    TEAM_2_SCORE = "team2_score"
 
-    def __init__(self, id_: int, name: str, date: datetime, state: State, players: List[Player], location: Location):
+    def __init__(self, id_: int, name: str, date: datetime, state: State, players: List[Player], location: Location,
+                 team1_score:int, team2_score: int):
         self.id = id_
         self.name = name
         self.date = date
         self.state = state
         self.players = players
         self.location = location
+        self.team1_score = team1_score
+        self.team2_score = team2_score
 
     @classmethod
     def from_json(cls, json_data: dict):
@@ -40,6 +45,8 @@ class Game(Cacheable):
                    [Player.from_json(data)
                     for data in json_data[Game.PLAYERS]],
                    Location.from_json(json_data[Game.LOCATION_REPR]) if json_data[Game.LOCATION] is not None else None,
+                   json_data[Game.TEAM_1_SCORE],
+                   json_data[Game.TEAM_2_SCORE],
                    )
 
     @staticmethod

@@ -10,11 +10,9 @@ from api import API
 from cache import NotFoundError
 from database import Database
 from gamecache import GameCache
-from keyboard import Keyboard
 from location import Location
 from locationcache import LocationCache
 from playercache import PlayerCache
-from texts import Texts
 
 
 class FrisbeerBot:
@@ -53,7 +51,8 @@ class FrisbeerBot:
     def game(self, bot: Bot, update: Update):
         name = update.message.text.split("/game")[1].strip()
         if not name:
-            FrisbeerBot._present_game_menu(update.message)
+            ActionBuilder.start(ActionBuilder.create(ActionTypes.GAME_MENU),
+                                update, self.game_cache, self.player_cache, self.location_cache)
         else:
             ActionBuilder.start(ActionBuilder.create(ActionTypes.CREATE_GAME),
                                 update, self.game_cache, self.player_cache, self.location_cache)
@@ -150,20 +149,6 @@ class FrisbeerBot:
             return
         self.location_cache.update_instance(created)
         reply("Created location {}".format(created.name))
-
-    @staticmethod
-    def _present_game_menu(message: Message):
-        """
-        Create base menu for starting or listing games
-        :param message: Telegram message to reply
-        :return: None
-        """
-        game_keyboard = Keyboard()
-        game_keyboard.add(Texts.CREATE_A_GAME,
-                          ActionBuilder.action_as_callback_data(ActionTypes.CREATE_GAME), 1, 1)
-        game_keyboard.add(Texts.LIST_GAMES,
-                          ActionBuilder.action_as_callback_data(ActionTypes.LIST_GAMES), 2, 1)
-        message.reply_text(Texts.CHOOSE_ACTION, reply_markup=game_keyboard.create())
 
     def _nop(self, bot, message: Message, update: Update, action: Action):
         logging.info("Nop")

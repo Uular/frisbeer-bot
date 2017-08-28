@@ -2,6 +2,7 @@ import json
 import logging
 import uuid
 from datetime import timedelta, date, datetime
+from typing import List, Iterable, Callable
 
 import redis
 from random_words import RandomWords
@@ -14,8 +15,9 @@ from database import Database
 from game import Game
 from gamecache import GameCache
 from helpers import get_player
-from keyboard import Keyboard, BackButtonKeyboard, YesNoKeyboard
+from keyboard import Keyboard, BackButtonKeyboard, YesNoKeyboard, KeyboardButton
 from locationcache import LocationCache
+from player import Player
 from playercache import PlayerCache
 from texts import Texts
 
@@ -46,7 +48,7 @@ class Action:
     @staticmethod
     def _show_loading(message):
         keyboard = Keyboard()
-        keyboard.add(Texts.BACK, ActionBuilder.action_as_callback_data(ActionTypes.LIST_GAMES), 1, 1)
+        keyboard.add(Texts.BACK, ActionBuilder.action_as_callback_data(ActionTypes.GAME_MENU), 1, 1)
         message.edit_text("Loading...", reply_markup=keyboard.create())
 
     def run_callback(self, update: Update, game_cache: GameCache, player_cache: PlayerCache,
@@ -142,6 +144,7 @@ class CreateGameAction(GameAction, PhasedAction):
         keyboard = Keyboard()
         self.callback_data = name
         keyboard.add(Texts.CREATE_GAME, ActionBuilder.to_callback_data(self), 1, 1)
+        keyboard.add(Texts.CANCEL, ActionBuilder.action_as_callback_data(ActionTypes.GAME_MENU), 2, 1)
         update.message.reply_text(name, reply_markup=keyboard.create())
 
     def run_callback(self, update: Update, game_cache: GameCache, player_cache: PlayerCache,
@@ -186,9 +189,9 @@ class CreateGameAction(GameAction, PhasedAction):
 
         new_phase = self.increase_phase()
 
+        keyboard = BackButtonKeyboard(ActionBuilder.action_as_callback_data(ActionTypes.GAME_MENU), Texts.CANCEL)
         if new_phase == 2:
             # Query a date
-            keyboard = Keyboard()
             days = ["Today", "Tomorrow", "+2", "+3", "+4", "+5"]
             for i in range(len(days)):
                 action = ActionBuilder.copy_action(self)
@@ -197,7 +200,6 @@ class CreateGameAction(GameAction, PhasedAction):
             text = Texts.ENTER_DATE
         elif new_phase == 3:
             # Query hour
-            keyboard = Keyboard()
             start = datetime.now().hour if game.date.date() == date.today() else 0
             for time in range(start, 24):
                 action = ActionBuilder.copy_action(self)
@@ -206,7 +208,6 @@ class CreateGameAction(GameAction, PhasedAction):
             text = Texts.ENTER_TIME
         elif new_phase == 4:
             # Query minutes
-            keyboard = Keyboard()
             for time in range(4):
                 hours = self.callback_data
                 action = ActionBuilder.copy_action(self)
@@ -215,7 +216,6 @@ class CreateGameAction(GameAction, PhasedAction):
                              ActionBuilder.to_callback_data(action), 1, time)
             text = Texts.ENTER_TIME
         elif new_phase == 5:
-            keyboard = Keyboard()
             i = 0
             for location in location_cache.get_all():
                 action = ActionBuilder.copy_action(self)
@@ -225,13 +225,14 @@ class CreateGameAction(GameAction, PhasedAction):
             text = Texts.ENTER_LOCATION
         elif new_phase == 6:
             # Confirm creation
-            keyboard = Keyboard()
             keyboard.add(Texts.CREATE_GAME, ActionBuilder.to_callback_data(self), 1, 1)
-            keyboard.add(Texts.EDIT_GAME, ActionBuilder.action_as_callback_data(ActionTypes.CREATE_GAME), 2, 1)
+            action = ActionBuilder.create(ActionTypes.CREATE_GAME)
+            action.callback_data = game.name
+            keyboard.add(Texts.EDIT_GAME, ActionBuilder.to_callback_data(action), 2, 1)
             text = "{} {}".format(game.date, location_cache.get(game.location))
         else:
             message.edit_text(Texts.ERROR,
-                              BackButtonKeyboard(ActionBuilder.action_as_callback_data(ActionTypes.LIST_GAMES))
+                              BackButtonKeyboard(ActionBuilder.action_as_callback_data(ActionTypes.LIST_PENDING_GAMES))
                               .create())
             return
         message.edit_text(game.name + " " + text, reply_markup=keyboard.create())
@@ -246,9 +247,9 @@ class InspectGameAction(GameAction, PhasedAction):
         message = update.callback_query.message
         self._show_loading(message)
         keyboard = Keyboard()
-        keyboard.add(Texts.BACK, ActionBuilder.action_as_callback_data(ActionTypes.LIST_GAMES), 10, 1)
+        keyboard.add(Texts.BACK, ActionBuilder.action_as_callback_data(ActionTypes.LIST_PENDING_GAMES), 10, 1)
         try:
-            game = self.get_game_or_fail(message, game_cache, ActionBuilder.create(ActionTypes.LIST_GAMES))
+            game = self.get_game_or_fail(message, game_cache, ActionBuilder.create(ActionTypes.LIST_PENDING_GAMES))
         except NotFoundError:
             return
         player = get_player(player_cache, update)
@@ -263,7 +264,7 @@ class InspectGameAction(GameAction, PhasedAction):
             self._inspect_ready_game(update, game, player, keyboard, game_cache, player_cache, location_cache)
 
         elif game.state == Game.State.PLAYED:
-            self._inspect_played_game(update, game_cache, player, keyboard, game_cache, player_cache, location_cache)
+            self._inspect_played_game(update, game, player, keyboard, game_cache, player_cache, location_cache)
 
     def _inspect_undermanned_game(self, update, game, player, keyboard, game_cache, player_cache, location_cache):
         logging.info("Inspecting undermanned game")
@@ -309,17 +310,22 @@ class InspectGameAction(GameAction, PhasedAction):
         message = update.callback_query.message
         self._show_loading(message)
 
-        keyboard = BackButtonKeyboard(ActionBuilder.action_as_callback_data(ActionTypes.LIST_GAMES))
+        keyboard = BackButtonKeyboard(ActionBuilder.action_as_callback_data(ActionTypes.LIST_READY_GAMES))
         keyboard = self._scoring_keyboard(game, keyboard)
-        message.edit_text(Texts.ENTER_SCORE + ": \n{} - \n{}".format(", ".join([player.nick for player in game.team1]),
-                                                                     ", ".join([player.nick for player in game.team2])),
-                          reply_markup=keyboard.create())
+        message.edit_text(
+            Texts.ENTER_SCORE + ": \n{} - \n{}\n{}\n{}".format(", ".join([player.nick for player in game.team1]),
+                                                               ", ".join([player.nick for player in game.team2]),
+                                                               game.date.strftime("%a %d. %b %H:%M"),
+                                                               game.location.name
+                                                               ),
+            reply_markup=keyboard.create())
 
-    def _inspect_played_game(self, update, game, player, keyboard, game_cache, player_cache, location_cache):
+    def _inspect_played_game(self, update: Update, game: Game, player: Player, keyboard: Keyboard,
+                             game_cache: GameCache, player_cache: PlayerCache, location_cache: LocationCache):
         logging.info("Inspecting full game")
         message = update.callback_query.message
         self._show_loading(message)
-        keyboard = BackButtonKeyboard(ActionBuilder.action_as_callback_data(ActionTypes.LIST_GAMES))
+        keyboard = BackButtonKeyboard(ActionBuilder.action_as_callback_data(ActionTypes.LIST_PENDING_ACCEPTING_GAMES))
         keyboard = self._scoring_keyboard(game, keyboard)
         message.edit_text(Texts.ENTER_SCORE + ": \n{} {} - {} \n{}".format(
             ", ".join([player.nick for player in game.team1]),
@@ -348,7 +354,20 @@ class SubmitScoresAction(GameAction):
 
 
 class ListGamesAction(Action):
-    TYPE = ActionTypes.LIST_GAMES
+    title_text = None
+    title_text_no_games = None
+
+    @staticmethod
+    def _filter(game: Game) -> bool:
+        raise NotImplemented()
+
+    @staticmethod
+    def _game_str(game: Game) -> str:
+        raise NotImplemented()
+
+    @staticmethod
+    def _additional_buttons(game: Game, player: Player) -> Iterable[KeyboardButton]:
+        return []
 
     def run_callback(self, update: Update,
                      game_cache: GameCache,
@@ -356,32 +375,86 @@ class ListGamesAction(Action):
                      location_cache: LocationCache):
         message = update.callback_query.message
         self._show_loading(message)
-        games = game_cache.filter(lambda game: game.state in [Game.State.PENDING, Game.State.READY])
+        games = game_cache.filter(self._filter)
         games = sorted(games, key=lambda game: game.date)
         keyboard = Keyboard()
-        text = Texts.UPCOMING_GAMES if games else Texts.NO_UPCOMING_GAMES
-        user = get_player(player_cache, update)
+        text = self.title_text if games else self.title_text_no_games
+        player = get_player(player_cache, update)
         for i in range(len(games)):
             game = games[i]
             action = ActionBuilder.create(ActionTypes.INSPECT_GAME)
             action.game_id = game.id
-            keyboard.add("{} {}/6 {}".format(game.date.strftime("%a %d. %b %H:%M"),
-                                             len(game.players),
-                                             game.name),
-                         ActionBuilder.to_callback_data(action), i, 1)
-            if user:
-                if not game.is_in_game(user):
-                    action = ActionBuilder.create(ActionTypes.JOIN_GAME)
-                    action.game_id = game.id
-                    keyboard.add(Texts.WANT_TO_JOIN, ActionBuilder.to_callback_data(action), i, 2)
-                else:
-                    action = ActionBuilder.create(ActionTypes.LEAVE_GAME)
-                    action.game_id = game.id
-                    keyboard.add(Texts.LEAVE_GAME, ActionBuilder.to_callback_data(action), i, 2)
-        if not games:
-            keyboard.add(Texts.CREATE_GAME, ActionBuilder.action_as_callback_data(ActionTypes.CREATE_GAME), 0, 1)
-        keyboard.add(Texts.BACK, ActionBuilder.action_as_callback_data(ActionTypes.GAME_MENU), len(games), 2)
+            keyboard.add(self._game_str(game), ActionBuilder.to_callback_data(action), i, 1)
+            c = 2
+            for button in self._additional_buttons(game, player):
+                keyboard.add_button(button, i, c)
+
+        keyboard.add(Texts.CREATE_GAME, ActionBuilder.action_as_callback_data(ActionTypes.CREATE_GAME), 100, 1)
+        keyboard.add(Texts.BACK, ActionBuilder.action_as_callback_data(ActionTypes.GAME_MENU), 100, 2)
         update.callback_query.message.edit_text(text, reply_markup=keyboard.create())
+
+
+class ListPendingGamesAction(ListGamesAction):
+    TYPE = ActionTypes.LIST_PENDING_GAMES
+
+    title_text = Texts.OPEN_GAMES
+    title_text_no_games = Texts.NO_UPCOMING_GAMES
+
+    @staticmethod
+    def _game_str(game: Game):
+        return "{} {}/6 {}".format(game.date.strftime("%a %d. %b %H:%M"), len(game.players), game.name)
+
+    @staticmethod
+    def _additional_buttons(game: Game, player: Player) -> Iterable[KeyboardButton]:
+        if not player:
+            return []
+        if not game.is_in_game(player):
+            action = ActionBuilder.create(ActionTypes.JOIN_GAME)
+            action.game_id = game.id
+            return [KeyboardButton(Texts.WANT_TO_JOIN, ActionBuilder.to_callback_data(action))]
+        else:
+            action = ActionBuilder.create(ActionTypes.LEAVE_GAME)
+            action.game_id = game.id
+            return [KeyboardButton(Texts.LEAVE_GAME, ActionBuilder.to_callback_data(action))]
+
+    @staticmethod
+    def _filter(game):
+        return game.state in [Game.State.PENDING]
+
+
+class ListReadyGamesAction(ListGamesAction):
+    TYPE = ActionTypes.LIST_READY_GAMES
+
+    title_text = Texts.READY_GAMES
+    title_text_no_games = Texts.NO_READY_GAMES
+
+    @staticmethod
+    def _game_str(game: Game) -> str:
+        return "{}\n{} - {}\n{}\n{}".format(
+            game.name,
+            ", ".join([player.nick for player in game.team1]),
+            ", ".join([player.nick for player in game.team2]),
+            game.date.strftime("%a %d. %b %H:%M"),
+            game.location.name)
+
+    @staticmethod
+    def _filter(game: Game) -> bool:
+        return game.state == Game.State.READY
+
+
+class ListPendingAcceptingGamesAction(ListGamesAction):
+    TYPE = ActionTypes.LIST_PENDING_ACCEPTING_GAMES
+
+    title_text = Texts.GAMES_WAITING_APPROVAL
+    title_text_no_games = Texts.NO_GAMES_WAITING_APPROVAL
+
+    @staticmethod
+    def _filter(game: Game) -> bool:
+        return game.state == Game.State.PLAYED
+
+    @staticmethod
+    def _game_str(game: Game) -> str:
+        return "id: {}\n{}".format(game.id, game.name)
 
 
 class JoinGameAction(GameAction):
@@ -393,7 +466,7 @@ class JoinGameAction(GameAction):
                      player_cache: PlayerCache,
                      location_cache: LocationCache):
         keyboard = Keyboard()
-        keyboard.add(Texts.BACK, ActionBuilder.action_as_callback_data(ActionTypes.LIST_GAMES), 100, 1)
+        keyboard.add(Texts.BACK, ActionBuilder.action_as_callback_data(ActionTypes.LIST_PENDING_GAMES), 100, 1)
         message = update.callback_query.message
         player = get_player(player_cache, update)
         if player is None:
@@ -428,7 +501,7 @@ class LeaveGameAction(GameAction):
                      player_cache: PlayerCache,
                      location_cache: LocationCache):
         keyboard = Keyboard()
-        keyboard.add(Texts.BACK, ActionBuilder.action_as_callback_data(ActionTypes.LIST_GAMES), 100, 1)
+        keyboard.add(Texts.BACK, ActionBuilder.action_as_callback_data(ActionTypes.LIST_PENDING_GAMES), 100, 1)
         message = update.callback_query.message
         player = get_player(player_cache, update)
         if player is None:
@@ -461,7 +534,7 @@ class CreateTeamsAction(GameAction, PhasedAction):
                      location_cache: LocationCache):
         logging.info("Creating teams")
         message = update.callback_query.message
-        back_action = ActionBuilder.create(ActionTypes.LIST_GAMES)
+        back_action = ActionBuilder.create(ActionTypes.LIST_PENDING_GAMES)
         try:
             game = self.get_game_or_fail(message, game_cache, back_action)
         except NotFoundError:
@@ -491,13 +564,28 @@ class CreateTeamsAction(GameAction, PhasedAction):
 class GameMenuAction(Action):
     TYPE = ActionTypes.GAME_MENU
 
-    def run_callback(self, update: Update, game_cache, player_cache, location_cache):
-        message = update.callback_query.message
-        self._show_loading(message)
+    def _show_menu(self, show_text: Callable):
         game_keyboard = Keyboard()
-        game_keyboard.add(Texts.CREATE_A_GAME, ActionBuilder.action_as_callback_data(ActionTypes.CREATE_GAME), 1, 1)
-        game_keyboard.add(Texts.LIST_GAMES, ActionBuilder.action_as_callback_data(ActionTypes.LIST_GAMES), 2, 1)
-        message.edit_text(Texts.CHOOSE_ACTION, reply_markup=game_keyboard.create())
+        game_keyboard.add(Texts.LIST_PENDING_GAMES,
+                          ActionBuilder.action_as_callback_data(ActionTypes.LIST_PENDING_GAMES), 2, 1)
+        game_keyboard.add(Texts.LIST_READY_GAMES,
+                          ActionBuilder.action_as_callback_data(ActionTypes.LIST_READY_GAMES), 3, 1)
+        game_keyboard.add(Texts.LIST_PENDING_ACCEPTING_GAMES,
+                          ActionBuilder.action_as_callback_data(ActionTypes.LIST_PENDING_ACCEPTING_GAMES), 4, 1)
+
+        game_keyboard.add(Texts.CREATE_A_GAME, ActionBuilder.action_as_callback_data(ActionTypes.CREATE_GAME), 5, 1)
+        game_keyboard.add(Texts.CLOSE, ActionBuilder.action_as_callback_data(ActionTypes.CLOSE), 5, 2)
+
+        show_text(Texts.CHOOSE_ACTION, reply_markup=game_keyboard.create())
+
+    def start(self, update: Update, game_cache: GameCache, player_cache: PlayerCache, location_cache: LocationCache):
+        message = update.message
+        self._show_menu(message.reply_text)
+
+    def run_callback(self, update: Update, game_cache: GameCache, player_cache: PlayerCache,
+                     location_cache: LocationCache):
+        message = update.callback_query.message
+        self._show_menu(message.edit_text)
 
 
 class DeleteGameAction(GameAction, PhasedAction):
@@ -508,7 +596,7 @@ class DeleteGameAction(GameAction, PhasedAction):
         message = update.callback_query.message
         self._show_loading(message)
         try:
-            game = self.get_game_or_fail(message, game_cache, ActionBuilder.create(ActionTypes.LIST_GAMES))
+            game = self.get_game_or_fail(message, game_cache, ActionBuilder.create(ActionTypes.LIST_PENDING_GAMES))
         except NotFoundError:
             return
 
@@ -521,13 +609,21 @@ class DeleteGameAction(GameAction, PhasedAction):
             action.callback_data = False
             no = ActionBuilder.to_callback_data(action)
             keyboard = YesNoKeyboard(yes, no)
-            message.edit_text(Texts.DELETE_GAME, reply_markup=keyboard.create())
+            message.edit_text(Texts.DELETE_GAME + " {}".format(game.name), reply_markup=keyboard.create())
         elif self.get_phase() == 2:
             if self.callback_data:
                 game.delete()
                 game_cache.delete_instance(game)
-            ActionBuilder.redirect(ActionBuilder.create(ActionTypes.LIST_GAMES),
+            ActionBuilder.redirect(ActionBuilder.create(ActionTypes.LIST_PENDING_GAMES),
                                    update, game_cache, player_cache, location_cache)
+
+
+class CloseAction(Action):
+    TYPE = ActionTypes.CLOSE
+
+    def run_callback(self, update: Update, game_cache: GameCache, player_cache: PlayerCache,
+                     location_cache: LocationCache):
+        update.callback_query.message.delete()
 
 
 class ActionBuilder:
@@ -538,7 +634,9 @@ class ActionBuilder:
 
     _action_mapping = {
         ActionTypes.CREATE_GAME: CreateGameAction,
-        ActionTypes.LIST_GAMES: ListGamesAction,
+        ActionTypes.LIST_PENDING_GAMES: ListPendingGamesAction,
+        ActionTypes.LIST_READY_GAMES: ListReadyGamesAction,
+        ActionTypes.LIST_PENDING_ACCEPTING_GAMES: ListPendingAcceptingGamesAction,
         ActionTypes.INSPECT_GAME: InspectGameAction,
         ActionTypes.GAME_MENU: GameMenuAction,
         ActionTypes.DELETE_GAME: DeleteGameAction,
@@ -546,6 +644,7 @@ class ActionBuilder:
         ActionTypes.LEAVE_GAME: LeaveGameAction,
         ActionTypes.CREATE_TEAMS: CreateTeamsAction,
         ActionTypes.SUBMIT_SCORE: SubmitScoresAction,
+        ActionTypes.CLOSE: CloseAction,
     }
 
     @staticmethod
