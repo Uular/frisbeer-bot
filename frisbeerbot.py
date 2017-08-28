@@ -1,18 +1,14 @@
-from datetime import datetime, date, timedelta
-
 import logging
 
 import telegram
-from random_words import RandomWords
 from telegram import Message, Update, Bot
 from telegram.ext import Updater, CommandHandler, CallbackQueryHandler
 
-from action import Action, CreateGameAction, ActionTypes, \
-    InspectGameAction, ActionBuilder
+from action import Action, ActionTypes, \
+    ActionBuilder
 from api import API
 from cache import NotFoundError
 from database import Database
-from game import Game
 from gamecache import GameCache
 from keyboard import Keyboard
 from location import Location
@@ -51,16 +47,16 @@ class FrisbeerBot:
         # logging.info("Action type is {}".format(ActionTypes(action.type)))
         action.run_callback(update, self.game_cache, self.player_cache, self.location_cache)
 
-    def greet(self, bot, update):
+    def greet(self, bot: Bot, update: Update):
         update.message.reply_text('Lets play frisbeer!\n Start with /game')
 
-    def game(self, bot, update):
+    def game(self, bot: Bot, update: Update):
         name = update.message.text.split("/game")[1].strip()
         if not name:
             FrisbeerBot._present_game_menu(update.message)
         else:
-            message = update.message.reply_text("Creating a game")
-            self._create_game(bot, message, update, CreateGameAction().with_callback_data(name))
+            ActionBuilder.start(ActionBuilder.create(ActionTypes.CREATE_GAME),
+                                update, self.game_cache, self.player_cache, self.location_cache)
 
     def register(self, bot, update):
         logging.info("Registering nick")
@@ -168,88 +164,6 @@ class FrisbeerBot:
         game_keyboard.add(Texts.LIST_GAMES,
                           ActionBuilder.action_as_callback_data(ActionTypes.LIST_GAMES), 2, 1)
         message.reply_text(Texts.CHOOSE_ACTION, reply_markup=game_keyboard.create())
-
-    def _game_menu(self, bot, message: Message, update: Update, action: Action):
-        self._present_game_menu(message)
-
-    def _create_game(self, bot, message: Message, update: Update, action):
-        action = CreateGameAction.from_action(action)
-        old_phase = action.get_phase()
-        if old_phase == 1:
-            # Create the game
-            game = Database.create_game()
-            action.set_unfinished_game_id(game.id)
-            rw = RandomWords()
-            name = action.callback_data if action.callback_data else \
-                "#" + "".join([word.title() for word in rw.random_words(count=3)])
-            game.name = name
-            Database.save()
-        game = Database.game_by_id(action.get_unfinished_game_id())
-        if not game:
-            return
-        if old_phase == 2:
-            # Save the date
-            now = date.today() + timedelta(days=action.callback_data)
-            game.date = now
-            Database.save()
-        elif old_phase == 3:
-            # Save hour
-            game.date += timedelta(hours=action.callback_data)
-            Database.save()
-        elif old_phase == 4:
-            # Save minutes
-            game.date += timedelta(minutes=action.callback_data)
-            Database.save()
-        elif old_phase == 5:
-            game.location = action.callback_data
-            Database.save()
-        elif old_phase == 6:
-            created_game = Game.create(game.name, game.date, game.location)
-            self.game_cache.update_instance(created_game)
-            self._inspect_game(bot, message, update, InspectGameAction().set_game_id(created_game.id))
-            return
-
-        new_phase = action.increase_phase()
-
-        if new_phase == 2:
-            # Query a date
-            keyboard = Keyboard()
-            days = ["Today", "Tomorrow", "+2", "+3", "+4", "+5"]
-            for i in range(len(days)):
-                keyboard.add(days[i], action.copy_with_callback_data(i), 1, i)
-            text = Bot.Texts.ENTER_DATE
-        elif new_phase == 3:
-            # Query hour
-            keyboard = Keyboard()
-            start = datetime.now().hour if game.date.date() == date.today() else 0
-            for time in range(start, 24):
-                keyboard.add(str(time), action.copy_with_callback_data(time), int(time / 8) + 1, time % 8 + 1)
-            text = Bot.Texts.ENTER_TIME
-        elif new_phase == 4:
-            # Query minutes
-            keyboard = Keyboard()
-            for time in range(4):
-                hours = action.callback_data
-                keyboard.add("{}:{}".format(str(hours).zfill(2), str(time * 15).zfill(2)),
-                             action.copy_with_callback_data(time * 15), 1, time)
-            text = Bot.Texts.ENTER_TIME
-        elif new_phase == 5:
-            keyboard = Keyboard()
-            i = 0
-            for location in self.location_cache.get_all():
-                keyboard.add("{}".format(location.name), action.copy_with_callback_data(location.id), i, 1)
-                i += 1
-            text = Bot.Texts.ENTER_LOCATION
-        elif new_phase == 6:
-            # Confirm creation
-            keyboard = Keyboard()
-            keyboard.add(Bot.Texts.CREATE_GAME, action, 1, 1)
-            keyboard.add(Bot.Texts.EDIT_GAME, CreateGameAction(), 2, 1)
-            text = "{} {}".format(game.date, self.location_cache.get(game.location))
-        else:
-            self._nop(bot, message, update, action)
-            return
-        message.edit_text(game.name + " " + text, reply_markup=keyboard.create())
 
     def _nop(self, bot, message: Message, update: Update, action: Action):
         logging.info("Nop")

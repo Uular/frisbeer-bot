@@ -1,12 +1,16 @@
 import json
 import logging
 import uuid
+from datetime import timedelta, date, datetime
+
 import redis
+from random_words import RandomWords
 
 from telegram import Update, Message
 
 from actiontypes import ActionTypes
 from cache import NotFoundError
+from database import Database
 from game import Game
 from gamecache import GameCache
 from helpers import get_player
@@ -48,6 +52,9 @@ class Action:
     def run_callback(self, update: Update, game_cache: GameCache, player_cache: PlayerCache,
                      location_cache: LocationCache):
         self._show_loading(update.callback_query.message)
+
+    def start(self, update: Update, game_cache: GameCache, player_cache: PlayerCache, location_cache: LocationCache):
+        pass
 
     @property
     def callback_data(self):
@@ -129,6 +136,105 @@ class CreateGameAction(GameAction, PhasedAction):
 
     def set_unfinished_game_id(self, id_: int):
         self._data[CreateGameAction._UNFINISHED_GAME_ID] = id_
+
+    def start(self, update: Update, game_cache: GameCache, player_cache: PlayerCache, location_cache: LocationCache):
+        name = update.message.text.split(" ", 1)[1]
+        keyboard = Keyboard()
+        self.callback_data = name
+        keyboard.add(Texts.CREATE_GAME, ActionBuilder.to_callback_data(self), 1, 1)
+        update.message.reply_text(name, reply_markup=keyboard.create())
+
+    def run_callback(self, update: Update, game_cache: GameCache, player_cache: PlayerCache,
+                     location_cache: LocationCache):
+        message = update.callback_query.message
+        old_phase = self.get_phase()
+        if old_phase == 1:
+            # Create the game
+            rw = RandomWords()
+            name = self.callback_data if self.callback_data else \
+                "#" + "".join([word.title() for word in rw.random_words(count=3)])
+            game = Database.create_game()
+            self.set_unfinished_game_id(game.id)
+            game.name = name
+            Database.save()
+        game = Database.game_by_id(self.get_unfinished_game_id())
+        if not game:
+            return
+        if old_phase == 2:
+            # Save the date
+            now = date.today() + timedelta(days=self.callback_data)
+            game.date = now
+            Database.save()
+        elif old_phase == 3:
+            # Save hour
+            game.date += timedelta(hours=self.callback_data)
+            Database.save()
+        elif old_phase == 4:
+            # Save minutes
+            game.date += timedelta(minutes=self.callback_data)
+            Database.save()
+        elif old_phase == 5:
+            game.location = self.callback_data
+            Database.save()
+        elif old_phase == 6:
+            created_game = Game.create(game.name, game.date, game.location)
+            game_cache.update_instance(created_game)
+            action = ActionBuilder.create(ActionTypes.INSPECT_GAME)
+            action.game_id = created_game.id
+            ActionBuilder.redirect(action, update, game_cache, player_cache, location_cache)
+            return
+
+        new_phase = self.increase_phase()
+
+        if new_phase == 2:
+            # Query a date
+            keyboard = Keyboard()
+            days = ["Today", "Tomorrow", "+2", "+3", "+4", "+5"]
+            for i in range(len(days)):
+                action = ActionBuilder.copy_action(self)
+                action.callback_data = i
+                keyboard.add(days[i], ActionBuilder.to_callback_data(action), 1, i)
+            text = Texts.ENTER_DATE
+        elif new_phase == 3:
+            # Query hour
+            keyboard = Keyboard()
+            start = datetime.now().hour if game.date.date() == date.today() else 0
+            for time in range(start, 24):
+                action = ActionBuilder.copy_action(self)
+                action.callback_data = time
+                keyboard.add(str(time), ActionBuilder.to_callback_data(action), int(time / 8) + 1, time % 8 + 1)
+            text = Texts.ENTER_TIME
+        elif new_phase == 4:
+            # Query minutes
+            keyboard = Keyboard()
+            for time in range(4):
+                hours = self.callback_data
+                action = ActionBuilder.copy_action(self)
+                action.callback_data = time * 15
+                keyboard.add("{}:{}".format(str(hours).zfill(2), str(time * 15).zfill(2)),
+                             ActionBuilder.to_callback_data(action), 1, time)
+            text = Texts.ENTER_TIME
+        elif new_phase == 5:
+            keyboard = Keyboard()
+            i = 0
+            for location in location_cache.get_all():
+                action = ActionBuilder.copy_action(self)
+                action.callback_data = location.id
+                keyboard.add("{}".format(location.name), ActionBuilder.to_callback_data(action), i, 1)
+                i += 1
+            text = Texts.ENTER_LOCATION
+        elif new_phase == 6:
+            # Confirm creation
+            keyboard = Keyboard()
+            keyboard.add(Texts.CREATE_GAME, ActionBuilder.to_callback_data(self), 1, 1)
+            keyboard.add(Texts.EDIT_GAME, ActionBuilder.action_as_callback_data(ActionTypes.CREATE_GAME), 2, 1)
+            text = "{} {}".format(game.date, location_cache.get(game.location))
+        else:
+            message.edit_text(Texts.ERROR,
+                              BackButtonKeyboard(ActionBuilder.action_as_callback_data(ActionTypes.LIST_GAMES))
+                              .create())
+            return
+        message.edit_text(game.name + " " + text, reply_markup=keyboard.create())
 
 
 class InspectGameAction(GameAction, PhasedAction):
@@ -460,6 +566,14 @@ class ActionBuilder:
                  player_cache: PlayerCache,
                  location_cache: LocationCache):
         action.run_callback(update, game_cache, player_cache, location_cache)
+
+    @staticmethod
+    def start(action: Action,
+              update: Update,
+              game_cache: GameCache,
+              player_cache: PlayerCache,
+              location_cache: LocationCache):
+        action.start(update, game_cache, player_cache, location_cache)
 
     @staticmethod
     def save(action: Action) -> Action:
