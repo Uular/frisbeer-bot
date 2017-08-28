@@ -1,0 +1,17 @@
+from enum import Enum
+
+
+class ActionTypes(Enum):
+    ACTION = 0
+    CREATE_GAME = 1
+    CLOSE = 2
+    INSPECT_GAME = 4
+    GAME_MENU = 5
+    DELETE_GAME = 6
+    JOIN_GAME = 7
+    LEAVE_GAME = 8
+    CREATE_TEAMS = 9
+    SUBMIT_SCORE = 10
+    LIST_PENDING_GAMES = 11
+    LIST_READY_GAMES = 12
+    LIST_PENDING_ACCEPTING_GAMES = 13
