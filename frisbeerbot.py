@@ -42,8 +42,7 @@ class FrisbeerBot:
         query = update.callback_query
         logging.info("Callback with data {}".format(query.data))
         action = ActionBuilder.from_callback_data(query.data)
-        # logging.info("Action type is {}".format(ActionTypes(action.type)))
-        action.run_callback(update, self.game_cache, self.player_cache, self.location_cache)
+        action.run_callback(bot, update, self.game_cache, self.player_cache, self.location_cache)
 
     def greet(self, bot: Bot, update: Update):
         update.message.reply_text('Lets play frisbeer!\n Start with /game')

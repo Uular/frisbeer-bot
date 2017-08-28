@@ -2,12 +2,12 @@ import json
 import logging
 import uuid
 from datetime import timedelta, date, datetime
-from typing import List, Iterable, Callable
+from typing import Iterable, Callable
 
 import redis
 from random_words import RandomWords
 
-from telegram import Update, Message
+from telegram import Update, Message, Bot, Chat
 
 from actiontypes import ActionTypes
 from cache import NotFoundError
@@ -51,7 +51,7 @@ class Action:
         keyboard.add(Texts.BACK, ActionBuilder.action_as_callback_data(ActionTypes.GAME_MENU), 1, 1)
         message.edit_text("Loading...", reply_markup=keyboard.create())
 
-    def run_callback(self, update: Update, game_cache: GameCache, player_cache: PlayerCache,
+    def run_callback(self, bot: Bot, update: Update, game_cache: GameCache, player_cache: PlayerCache,
                      location_cache: LocationCache):
         self._show_loading(update.callback_query.message)
 
@@ -147,7 +147,7 @@ class CreateGameAction(GameAction, PhasedAction):
         keyboard.add(Texts.CANCEL, ActionBuilder.action_as_callback_data(ActionTypes.GAME_MENU), 2, 1)
         update.message.reply_text(name, reply_markup=keyboard.create())
 
-    def run_callback(self, update: Update, game_cache: GameCache, player_cache: PlayerCache,
+    def run_callback(self, bot: Bot, update: Update, game_cache: GameCache, player_cache: PlayerCache,
                      location_cache: LocationCache):
         message = update.callback_query.message
         old_phase = self.get_phase()
@@ -184,7 +184,7 @@ class CreateGameAction(GameAction, PhasedAction):
             game_cache.update_instance(created_game)
             action = ActionBuilder.create(ActionTypes.INSPECT_GAME)
             action.game_id = created_game.id
-            ActionBuilder.redirect(action, update, game_cache, player_cache, location_cache)
+            ActionBuilder.redirect(action, bot, update, game_cache, player_cache, location_cache)
             return
 
         new_phase = self.increase_phase()
@@ -241,7 +241,7 @@ class CreateGameAction(GameAction, PhasedAction):
 class InspectGameAction(GameAction, PhasedAction):
     TYPE = ActionTypes.INSPECT_GAME
 
-    def run_callback(self, update: Update, game_cache: GameCache, player_cache: PlayerCache,
+    def run_callback(self, bot: Bot, update: Update, game_cache: GameCache, player_cache: PlayerCache,
                      location_cache: LocationCache):
         logging.info("Inspecting game {}".format(self.game_id))
         message = update.callback_query.message
@@ -338,7 +338,7 @@ class InspectGameAction(GameAction, PhasedAction):
 class SubmitScoresAction(GameAction):
     TYPE = ActionTypes.SUBMIT_SCORE
 
-    def run_callback(self, update: Update, game_cache: GameCache, player_cache: PlayerCache,
+    def run_callback(self, bot: Bot, update: Update, game_cache: GameCache, player_cache: PlayerCache,
                      location_cache: LocationCache):
         logging.info("Submitting scores")
         message = update.callback_query.message
@@ -350,7 +350,7 @@ class SubmitScoresAction(GameAction):
         game = game.submit_score(self.callback_data["t1"], self.callback_data["t2"])
         game_cache.update(game)
         action = ActionBuilder.copy_action(self, ActionTypes.INSPECT_GAME)
-        ActionBuilder.redirect(action, update, game_cache, player_cache, location_cache)
+        ActionBuilder.redirect(action, bot, update, game_cache, player_cache, location_cache)
 
 
 class ListGamesAction(Action):
@@ -369,7 +369,7 @@ class ListGamesAction(Action):
     def _additional_buttons(game: Game, player: Player) -> Iterable[KeyboardButton]:
         return []
 
-    def run_callback(self, update: Update,
+    def run_callback(self, bot: Bot, update: Update,
                      game_cache: GameCache,
                      player_cache: PlayerCache,
                      location_cache: LocationCache):
@@ -461,6 +461,7 @@ class JoinGameAction(GameAction):
     TYPE = ActionTypes.JOIN_GAME
 
     def run_callback(self,
+                     bot: Bot,
                      update: Update,
                      game_cache: GameCache,
                      player_cache: PlayerCache,
@@ -488,7 +489,9 @@ class JoinGameAction(GameAction):
             message.edit_text(Texts.JOIN_FAILED, reply_markup=keyboard.create())
             return
         game_cache.update(game)
-        ActionBuilder.redirect(ActionBuilder.copy_action(self, ActionTypes.INSPECT_GAME), update,
+        if update.effective_chat.type in [Chat.GROUP, Chat.SUPERGROUP]:
+            bot.send_message(chat_id=update.effective_chat.id, text="{} joined game {}".format(player.nick, game.name))
+        ActionBuilder.redirect(ActionBuilder.copy_action(self, ActionTypes.INSPECT_GAME), bot, update,
                                game_cache, player_cache, location_cache)
 
 
@@ -496,6 +499,7 @@ class LeaveGameAction(GameAction):
     TYPE = ActionTypes.LEAVE_GAME
 
     def run_callback(self,
+                     bot: Bot,
                      update: Update,
                      game_cache: GameCache,
                      player_cache: PlayerCache,
@@ -523,14 +527,16 @@ class LeaveGameAction(GameAction):
             message.edit_text(Texts.LEAVE_FAILED, reply_markup=keyboard.create())
             return
         game_cache.update(game)
-        ActionBuilder.redirect(ActionBuilder.copy_action(self, ActionTypes.INSPECT_GAME), update,
+        if update.effective_chat.type in [Chat.GROUP, Chat.SUPERGROUP]:
+            bot.send_message(chat_id=update.effective_chat.id, text="{} left game {}".format(player.nick, game.name))
+        ActionBuilder.redirect(ActionBuilder.copy_action(self, ActionTypes.INSPECT_GAME), bot, update,
                                game_cache, player_cache, location_cache)
 
 
 class CreateTeamsAction(GameAction, PhasedAction):
     TYPE = ActionTypes.CREATE_TEAMS
 
-    def run_callback(self, update: Update, game_cache: GameCache, player_cache: PlayerCache,
+    def run_callback(self, bot: Bot, update: Update, game_cache: GameCache, player_cache: PlayerCache,
                      location_cache: LocationCache):
         logging.info("Creating teams")
         message = update.callback_query.message
@@ -558,7 +564,7 @@ class CreateTeamsAction(GameAction, PhasedAction):
             action = ActionBuilder.create(ActionTypes.INSPECT_GAME)
             action.game_id = game.id
             ActionBuilder.redirect(
-                action, update, game_cache, player_cache, location_cache)
+                action, bot, update, game_cache, player_cache, location_cache)
 
 
 class GameMenuAction(Action):
@@ -582,7 +588,7 @@ class GameMenuAction(Action):
         message = update.message
         self._show_menu(message.reply_text)
 
-    def run_callback(self, update: Update, game_cache: GameCache, player_cache: PlayerCache,
+    def run_callback(self, bot: Bot, update: Update, game_cache: GameCache, player_cache: PlayerCache,
                      location_cache: LocationCache):
         message = update.callback_query.message
         self._show_menu(message.edit_text)
@@ -591,7 +597,7 @@ class GameMenuAction(Action):
 class DeleteGameAction(GameAction, PhasedAction):
     TYPE = ActionTypes.DELETE_GAME
 
-    def run_callback(self, update: Update, game_cache: GameCache, player_cache: PlayerCache,
+    def run_callback(self, bot: Bot, update: Update, game_cache: GameCache, player_cache: PlayerCache,
                      location_cache: LocationCache):
         message = update.callback_query.message
         self._show_loading(message)
@@ -614,14 +620,14 @@ class DeleteGameAction(GameAction, PhasedAction):
             if self.callback_data:
                 game.delete()
                 game_cache.delete_instance(game)
-            ActionBuilder.redirect(ActionBuilder.create(ActionTypes.LIST_PENDING_GAMES),
+            ActionBuilder.redirect(ActionBuilder.create(ActionTypes.LIST_PENDING_GAMES), bot,
                                    update, game_cache, player_cache, location_cache)
 
 
 class CloseAction(Action):
     TYPE = ActionTypes.CLOSE
 
-    def run_callback(self, update: Update, game_cache: GameCache, player_cache: PlayerCache,
+    def run_callback(self, bot: Bot, update: Update, game_cache: GameCache, player_cache: PlayerCache,
                      location_cache: LocationCache):
         update.callback_query.message.delete()
 
@@ -660,11 +666,12 @@ class ActionBuilder:
 
     @staticmethod
     def redirect(action: Action,
+                 bot: Bot,
                  update: Update,
                  game_cache: GameCache,
                  player_cache: PlayerCache,
                  location_cache: LocationCache):
-        action.run_callback(update, game_cache, player_cache, location_cache)
+        action.run_callback(bot, update, game_cache, player_cache, location_cache)
 
     @staticmethod
     def start(action: Action,
