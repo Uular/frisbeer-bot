@@ -4,3 +4,4 @@ fuzzywuzzy
 python-Levenshtein
 sqlalchemy
 RandomWords
+redis
