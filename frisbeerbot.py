@@ -1,10 +1,10 @@
 import logging
 
 import telegram
-from telegram import Message, Update, Bot
+from telegram import Update, Bot
 from telegram.ext import Updater, CommandHandler, CallbackQueryHandler
 
-from action import Action, ActionTypes, \
+from action import ActionTypes, \
     ActionBuilder
 from api import API
 from cache import NotFoundError
@@ -24,6 +24,7 @@ class FrisbeerBot:
         self.updater.dispatcher.add_handler(CommandHandler('rank', self.rank))
         self.updater.dispatcher.add_handler(CommandHandler('register', self.register))
         self.updater.dispatcher.add_handler(CommandHandler('location', self.location))
+        self.updater.dispatcher.add_handler(CommandHandler('notification_channel', self.notification_channel))
         self.updater.dispatcher.add_handler(CallbackQueryHandler(self.callback))
 
         API.login("admin", "adminpassu")
@@ -149,7 +150,13 @@ class FrisbeerBot:
         self.location_cache.update_instance(created)
         reply("Created location {}".format(created.name))
 
-    def _nop(self, bot, message: Message, update: Update, action: Action):
-        logging.info("Nop")
-        if update.callback_query:
-            update.callback_query.answer()
+    def notification_channel(self, bot, update):
+        logging.info("Registering notification channel")
+        channel_id = update.message.chat.id
+        channel = Database.get_notification_channel_by_id(channel_id)
+        if channel is None:
+            channel = Database.register_channel(channel_id)
+            update.message.reply_text("Registered this channel to receive notifications")
+        else:
+            Database.delete_channel(channel_id)
+            update.message.reply_text("Unregistered this channel from notifications")

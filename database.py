@@ -1,3 +1,5 @@
+from typing import Iterable
+
 from sqlalchemy import create_engine, Column, Integer, String, DateTime
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
@@ -27,6 +29,11 @@ class Database:
         name = Column(String)
         date = Column(DateTime)
         location = Column(Integer)
+
+    class NotificationChannel(Base):
+        __tablename__ = 'notification_channel'
+        id = Column(Integer, primary_key=True)
+        channel_id = Column(Integer, unique=True)
 
     Base.metadata.create_all(engine)
     Session = sessionmaker(bind=engine)
@@ -60,5 +67,26 @@ class Database:
         return Database.session.query(Database.User).filter(Database.User.telegram_username == username).first()
 
     @staticmethod
+    def register_channel(channel_id: int) -> NotificationChannel:
+        channel = Database.NotificationChannel()
+        channel.channel_id = channel_id
+        Database.session.add(channel)
+        Database.session.commit()
+        return channel
+
+    @staticmethod
+    def get_notification_channels() -> Iterable[NotificationChannel]:
+        return list(Database.session.query(Database.NotificationChannel))
+
+    @staticmethod
+    def get_notification_channel_by_id(channel_id: int) -> NotificationChannel:
+        return Database.session.query(Database.NotificationChannel) \
+            .filter(Database.NotificationChannel.channel_id == channel_id).first()
+
+    @staticmethod
     def save():
         Database.session.commit()
+
+    @staticmethod
+    def delete_channel(channel_id):
+        Database.session.delete(Database.get_notification_channel_by_id(channel_id))

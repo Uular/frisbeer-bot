@@ -66,6 +66,11 @@ class Action:
     def callback_data(self, value):
         self._data[Action._KEY_CALLBACK_DATA] = value
 
+    @staticmethod
+    def _send_notification(bot: Bot, message: str) -> None:
+        for channel in Database.get_notification_channels():
+            bot.send_message(chat_id=channel.channel_id, text=message)
+
 
 class PhasedAction(Action):
     """
@@ -184,6 +189,9 @@ class CreateGameAction(GameAction, PhasedAction):
             game_cache.update_instance(created_game)
             action = ActionBuilder.create(ActionTypes.INSPECT_GAME)
             action.game_id = created_game.id
+            self._send_notification(bot, "A new upcoming game {} {} @{}"
+                                    .format(created_game.name, created_game.date.strftime("%a %d. %b %H:%M"),
+                                            created_game.location.name))
             ActionBuilder.redirect(action, bot, update, game_cache, player_cache, location_cache)
             return
 
@@ -349,6 +357,8 @@ class SubmitScoresAction(GameAction):
             return
         game = game.submit_score(self.callback_data["t1"], self.callback_data["t2"])
         game_cache.update(game)
+        self._send_notification(bot, "Game {} - {} ended {}-{}"
+                                .format(game.team1, game.team2, game.team1_score, game.team2_score))
         action = ActionBuilder.copy_action(self, ActionTypes.INSPECT_GAME)
         ActionBuilder.redirect(action, bot, update, game_cache, player_cache, location_cache)
 
@@ -489,8 +499,7 @@ class JoinGameAction(GameAction):
             message.edit_text(Texts.JOIN_FAILED, reply_markup=keyboard.create())
             return
         game_cache.update(game)
-        if update.effective_chat.type in [Chat.GROUP, Chat.SUPERGROUP]:
-            bot.send_message(chat_id=update.effective_chat.id, text="{} joined game {}".format(player.nick, game.name))
+        self._send_notification(bot, "{} joined game {}".format(player.nick, game.name))
         ActionBuilder.redirect(ActionBuilder.copy_action(self, ActionTypes.INSPECT_GAME), bot, update,
                                game_cache, player_cache, location_cache)
 
@@ -526,9 +535,9 @@ class LeaveGameAction(GameAction):
         if game.is_in_game(player):
             message.edit_text(Texts.LEAVE_FAILED, reply_markup=keyboard.create())
             return
+
         game_cache.update(game)
-        if update.effective_chat.type in [Chat.GROUP, Chat.SUPERGROUP]:
-            bot.send_message(chat_id=update.effective_chat.id, text="{} left game {}".format(player.nick, game.name))
+        self._send_notification(bot, "{} left game {}".format(player.nick, game.name))
         ActionBuilder.redirect(ActionBuilder.copy_action(self, ActionTypes.INSPECT_GAME), bot, update,
                                game_cache, player_cache, location_cache)
 
@@ -563,8 +572,8 @@ class CreateTeamsAction(GameAction, PhasedAction):
                 game_cache.update(game)
             action = ActionBuilder.create(ActionTypes.INSPECT_GAME)
             action.game_id = game.id
-            ActionBuilder.redirect(
-                action, bot, update, game_cache, player_cache, location_cache)
+            self._send_notification(bot, "Teams for {} are {} - {}".format(game.name, game.team1, game.team2))
+            ActionBuilder.redirect(action, bot, update, game_cache, player_cache, location_cache)
 
 
 class GameMenuAction(Action):
@@ -620,6 +629,7 @@ class DeleteGameAction(GameAction, PhasedAction):
             if self.callback_data:
                 game.delete()
                 game_cache.delete_instance(game)
+                self._send_notification(bot, "{} was cancelled".format(game.name))
             ActionBuilder.redirect(ActionBuilder.create(ActionTypes.LIST_PENDING_GAMES), bot,
                                    update, game_cache, player_cache, location_cache)
 
