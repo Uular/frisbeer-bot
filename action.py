@@ -71,6 +71,12 @@ class Action:
         for channel in Database.get_notification_channels():
             bot.send_message(chat_id=channel.channel_id, text=message)
 
+    def _is_query_or_error(self, update, message):
+        if update.effective_chat.type != Chat.PRIVATE:
+            message.reply_text("I'm a bit shy. Please let's do that in private")
+            return False
+        return True
+
 
 class PhasedAction(Action):
     """
@@ -145,6 +151,8 @@ class CreateGameAction(GameAction, PhasedAction):
         self._data[CreateGameAction._UNFINISHED_GAME_ID] = id_
 
     def start(self, update: Update, game_cache: GameCache, player_cache: PlayerCache, location_cache: LocationCache):
+        if not self._is_query_or_error(update, update.message):
+            return
         name = update.message.text.split(" ", 1)[1]
         keyboard = Keyboard()
         self.callback_data = name
@@ -594,6 +602,8 @@ class GameMenuAction(Action):
         show_text(Texts.CHOOSE_ACTION, reply_markup=game_keyboard.create())
 
     def start(self, update: Update, game_cache: GameCache, player_cache: PlayerCache, location_cache: LocationCache):
+        if not self._is_query_or_error(update, update.message):
+            return
         message = update.message
         self._show_menu(message.reply_text)
 
