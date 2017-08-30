@@ -1,3 +1,5 @@
+setuptools
+pip
 python-telegram-bot
 requests
 fuzzywuzzy

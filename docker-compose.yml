@@ -1,0 +1,11 @@
+version: '3'
+services:
+  frisbeer-bot:
+    image: frisbeer-bot
+    links:
+    - redis
+    command: ${KEY}
+    volumes:
+      - ./db.sqlite3:/opt/frisbeer-bot/db.sqlite3
+  redis:
+    image: redis:3.2.10

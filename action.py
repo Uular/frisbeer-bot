@@ -656,7 +656,7 @@ class ActionBuilder:
     _KEY_UUID = "u"
     _KEY_TYPE = "t"
 
-    _r = redis.StrictRedis(host='localhost', port=6379, db=0)
+    _r = redis.StrictRedis(host='redis', port=6379, db=0)
 
     _action_mapping = {
         ActionTypes.CREATE_GAME: CreateGameAction,
