@@ -143,7 +143,16 @@ class FrisbeerBot:
         if len(l) == 1:
             created = Location.create(l[0])
         elif len(l) == 3:
-            created = Location.create(l[0], float(l[1]), float(l[2]))
+            try:
+                lon = float(l[1])
+                lat = float(l[2])
+            except ValueError:
+                reply(usage)
+                return
+            created = Location.create(l[0], lon, lat)
+            if not created:
+                reply(usage)
+                return
         else:
             reply(usage)
             return

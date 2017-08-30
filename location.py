@@ -1,4 +1,6 @@
-from api import API
+import logging
+
+from api import API, APIError
 from cacheable import Cacheable
 
 
@@ -25,7 +27,10 @@ class Location(Cacheable):
 
     @staticmethod
     def create(name: str, longitude: float = None, latitude: float = None) -> 'Location':
-        return Location.from_json(API.create_location(name, longitude, latitude))
+        try:
+            return Location.from_json(API.create_location(name, longitude, latitude))
+        except APIError:
+            logging.error("Couldn't create location {}", name)
 
     def __str__(self):
         return self.name
