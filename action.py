@@ -366,7 +366,9 @@ class SubmitScoresAction(GameAction):
         game = game.submit_score(self.callback_data["t1"], self.callback_data["t2"])
         game_cache.update(game)
         self._send_notification(bot, "Game {} - {} ended {}-{}"
-                                .format(game.team1, game.team2, game.team1_score, game.team2_score))
+                                .format(", ".join([player.nick for player in game.team1]),
+                                        ", ".join([player.nick for player in game.team2]),
+                                         game.team1_score, game.team2_score))
         action = ActionBuilder.copy_action(self, ActionTypes.INSPECT_GAME)
         ActionBuilder.redirect(action, bot, update, game_cache, player_cache, location_cache)
 
