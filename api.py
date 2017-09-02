@@ -1,9 +1,5 @@
 import requests
 
-# api_url = "https://ranta.org/frisbeer/API/"
-# api_url = "http://localhost:8000/API/"
-
-api_url = "https://t3mu.kapsi.fi/frisbeer/API/"
 players = "players/"
 games = "games/"
 locations = "locations/"
@@ -14,9 +10,15 @@ class APIError(Exception):
 
 
 class API:
+    api_url = None
+
     _default_headers = {
         'content-type': 'application/json'
     }
+
+    @staticmethod
+    def setup(api_url: str):
+        API.api_url = api_url
 
     @staticmethod
     def login(username, password):
@@ -29,7 +31,7 @@ class API:
 
     @staticmethod
     def _get(endpoint, instance_id=None):
-        url = api_url + endpoint
+        url = API.api_url + endpoint
         if instance_id:
             url += instance_id
         response = requests.get(url, headers=API._default_headers)
@@ -42,7 +44,7 @@ class API:
 
     @staticmethod
     def _post(endpoint, id_: int = None, payload=None):
-        url = api_url + endpoint
+        url = API.api_url + endpoint
         if id_:
             url += str(id_)
         response = requests.post(url, headers=API._default_headers, json=payload)
@@ -55,11 +57,11 @@ class API:
 
     @staticmethod
     def _delete(endpoint: str, id_: int):
-        return requests.delete(api_url + endpoint + str(id_) + "/", headers=API._default_headers)
+        return requests.delete(API.api_url + endpoint + str(id_) + "/", headers=API._default_headers)
 
     @staticmethod
     def _patch(endpoint: str, id_: int = None, payload=None):
-        url = api_url + endpoint
+        url = API.api_url + endpoint
         if id_:
             url += str(id_) + "/"
         response = requests.patch(url, headers=API._default_headers, json=payload)

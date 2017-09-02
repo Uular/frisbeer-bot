@@ -6,7 +6,6 @@ from telegram.ext import Updater, CommandHandler, CallbackQueryHandler
 
 from action import ActionTypes, \
     ActionBuilder
-from api import API
 from cache import NotFoundError
 from database import Database
 from gamecache import GameCache
@@ -27,7 +26,6 @@ class FrisbeerBot:
         self.updater.dispatcher.add_handler(CommandHandler('notification_channel', self.notification_channel))
         self.updater.dispatcher.add_handler(CallbackQueryHandler(self.callback))
 
-        API.login("admin", "adminpassu")
         self.game_cache = GameCache()
         self.game_cache.update()
         self.player_cache = PlayerCache()

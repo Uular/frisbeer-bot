@@ -7,3 +7,4 @@ python-Levenshtein
 sqlalchemy
 RandomWords
 redis
+click
