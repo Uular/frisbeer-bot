@@ -658,7 +658,7 @@ class ActionBuilder:
     _KEY_UUID = "u"
     _KEY_TYPE = "t"
 
-    _r = redis.StrictRedis(host='redis', port=6379, db=0)
+    _r = None
 
     _action_mapping = {
         ActionTypes.CREATE_GAME: CreateGameAction,
@@ -674,6 +674,10 @@ class ActionBuilder:
         ActionTypes.SUBMIT_SCORE: SubmitScoresAction,
         ActionTypes.CLOSE: CloseAction,
     }
+
+    @staticmethod
+    def setup(redis_host, redis_port):
+        ActionBuilder._r = redis.StrictRedis(host=redis_host, port=redis_port, db=0)
 
     @staticmethod
     def from_callback_data(json_data: str) -> Action:

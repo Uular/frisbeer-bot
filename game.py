@@ -1,3 +1,4 @@
+import dateutil.parser
 from datetime import datetime
 from enum import Enum
 from typing import List
@@ -26,7 +27,7 @@ class Game(Cacheable):
     TEAM_2_SCORE = "team2_score"
 
     def __init__(self, id_: int, name: str, date: datetime, state: State, players: List[Player], location: Location,
-                 team1_score:int, team2_score: int):
+                 team1_score: int, team2_score: int):
         self.id = id_
         self.name = name
         self.date = date
@@ -40,7 +41,7 @@ class Game(Cacheable):
     def from_json(cls, json_data: dict):
         return cls(json_data[Game.ID],
                    json_data[Game.NAME],
-                   datetime.strptime(json_data[Game.DATE], "%Y-%m-%dT%H:%M:%SZ"),
+                   dateutil.parser.parse(json_data[Game.DATE]),
                    Game.State(json_data[Game.STATE]),
                    [Player.from_json(data)
                     for data in json_data[Game.PLAYERS]],
