@@ -241,12 +241,14 @@ class CreateGameAction(GameAction, PhasedAction):
             text = Texts.ENTER_LOCATION
         elif new_phase == 6:
             # Confirm creation
-            keyboard.add(Texts.CREATE_GAME, ActionBuilder.to_callback_data(self), 1, 1)
+            action = ActionBuilder.copy_action(self)
+            keyboard.add(Texts.CREATE_GAME, ActionBuilder.to_callback_data(action), 1, 1)
             action = ActionBuilder.create(ActionTypes.CREATE_GAME)
             action.callback_data = game.name
             keyboard.add(Texts.EDIT_GAME, ActionBuilder.to_callback_data(action), 2, 1)
             text = "{} {}".format(game.date, location_cache.get(game.location))
         else:
+            logging.error("Unknown phase")
             message.edit_text(Texts.ERROR,
                               BackButtonKeyboard(ActionBuilder.action_as_callback_data(ActionTypes.LIST_PENDING_GAMES))
                               .create())
