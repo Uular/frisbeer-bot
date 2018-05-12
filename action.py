@@ -312,7 +312,7 @@ class InspectGameAction(GameAction, PhasedAction):
             keyboard.add(Texts.CREATE_TEAMS,
                      ActionBuilder.to_callback_data(ActionBuilder.copy_action(self, ActionTypes.CREATE_TEAMS)),
                      1, 1)
-        message.edit_text(game.name, reply_markup=keyboard.create())
+        message.edit_text(game.long_str(), reply_markup=keyboard.create())
 
     def _scoring_keyboard(self, game, keyboard: Keyboard) -> Keyboard:
         t1_scores = [2, 2, 1, 0]
@@ -371,7 +371,7 @@ class SubmitScoresAction(GameAction):
         self._send_notification(bot, "Game {} - {} ended {}-{}"
                                 .format(", ".join([player.nick for player in game.team1]),
                                         ", ".join([player.nick for player in game.team2]),
-                                         game.team1_score, game.team2_score))
+                                        game.team1_score, game.team2_score))
         action = ActionBuilder.copy_action(self, ActionTypes.INSPECT_GAME)
         ActionBuilder.redirect(action, bot, update, game_cache, player_cache, location_cache)
 
@@ -586,7 +586,10 @@ class CreateTeamsAction(GameAction, PhasedAction):
                 game_cache.update(game)
             action = ActionBuilder.create(ActionTypes.INSPECT_GAME)
             action.game_id = game.id
-            self._send_notification(bot, "Teams for {} are {} - {}".format(game.name, game.team1, game.team2))
+            self._send_notification(bot, "Teams for {} are {} - {}".format(game.name,
+                                                                           ", ".join(player.nick for player in game.team1),
+                                                                           ", ".join(player.nick for player in game.team2),
+                                                                           ))
             ActionBuilder.redirect(action, bot, update, game_cache, player_cache, location_cache)
 
 
