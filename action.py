@@ -72,6 +72,10 @@ class Action:
             bot.send_message(chat_id=channel.channel_id, text=message)
 
     def _is_query_or_error(self, update, message):
+        """
+        Check if message came in query. Send notification if message was sent to a channel
+        :return True if it was query, False otherwise
+        """
         if update.effective_chat.type != Chat.PRIVATE:
             message.reply_text("I'm a bit shy. Please let's do that in private")
             return False
@@ -315,8 +319,8 @@ class InspectGameAction(GameAction, PhasedAction):
         message = update.callback_query.message
         if game.is_in_game(player):
             keyboard.add(Texts.CREATE_TEAMS,
-                     ActionBuilder.to_callback_data(ActionBuilder.copy_action(self, ActionTypes.CREATE_TEAMS)),
-                     1, 1)
+                         ActionBuilder.to_callback_data(ActionBuilder.copy_action(self, ActionTypes.CREATE_TEAMS)),
+                         1, 1)
         message.edit_text(game.long_str(), reply_markup=keyboard.create())
 
     def _scoring_keyboard(self, game, keyboard: Keyboard) -> Keyboard:
@@ -592,8 +596,10 @@ class CreateTeamsAction(GameAction, PhasedAction):
             action = ActionBuilder.create(ActionTypes.INSPECT_GAME)
             action.game_id = game.id
             self._send_notification(bot, "Teams for {} are {} - {}".format(game.name,
-                                                                           ", ".join(player.nick for player in game.team1),
-                                                                           ", ".join(player.nick for player in game.team2),
+                                                                           ", ".join(
+                                                                               player.nick for player in game.team1),
+                                                                           ", ".join(
+                                                                               player.nick for player in game.team2),
                                                                            ))
             ActionBuilder.redirect(action, bot, update, game_cache, player_cache, location_cache)
 
