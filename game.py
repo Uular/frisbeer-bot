@@ -76,6 +76,9 @@ class Game(Cacheable):
                 return True
         return False
 
+    def is_full(self):
+        return len(self.players) >= 6
+
     def create_teams(self):
         return self.from_json(API.create_teams(self.id))
 

@@ -431,14 +431,15 @@ class ListPendingGamesAction(ListGamesAction):
     def _additional_buttons(game: Game, player: Player) -> Iterable[KeyboardButton]:
         if not player:
             return []
-        if not game.is_in_game(player):
+        if not game.is_in_game(player) and not game.is_full():
             action = ActionBuilder.create(ActionTypes.JOIN_GAME)
             action.game_id = game.id
             return [KeyboardButton(Texts.WANT_TO_JOIN, ActionBuilder.to_callback_data(action))]
-        else:
+        if game.is_in_game(player):
             action = ActionBuilder.create(ActionTypes.LEAVE_GAME)
             action.game_id = game.id
             return [KeyboardButton(Texts.LEAVE_GAME, ActionBuilder.to_callback_data(action))]
+        return []
 
     @staticmethod
     def _filter(game):
