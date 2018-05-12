@@ -383,7 +383,7 @@ class SubmitScoresAction(GameAction):
                                 .format(", ".join([player.nick for player in game.team1]),
                                         ", ".join([player.nick for player in game.team2]),
                                         game.team1_score, game.team2_score))
-        action = ActionBuilder.copy_action(self, ActionTypes.INSPECT_GAME)
+        action = ActionBuilder.create(ActionTypes.GAME_MENU)
         ActionBuilder.redirect(action, bot, update, game_cache, player_cache, location_cache)
 
 
