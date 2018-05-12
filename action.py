@@ -308,7 +308,8 @@ class InspectGameAction(GameAction, PhasedAction):
     def _inspect_full_pending_game(self, update, game, player, keyboard, game_cache, player_cache, location_cache):
         logging.info("Inspecting full pending game")
         message = update.callback_query.message
-        keyboard.add(Texts.CREATE_TEAMS,
+        if game.is_in_game(player):
+            keyboard.add(Texts.CREATE_TEAMS,
                      ActionBuilder.to_callback_data(ActionBuilder.copy_action(self, ActionTypes.CREATE_TEAMS)),
                      1, 1)
         message.edit_text(game.name, reply_markup=keyboard.create())
