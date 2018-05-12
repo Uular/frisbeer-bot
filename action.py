@@ -144,6 +144,10 @@ class CreateGameAction(GameAction, PhasedAction):
     TYPE = ActionTypes.CREATE_GAME
     _UNFINISHED_GAME_ID = "unfinished_game_id"
 
+    def _create_name(self):
+        rw = RandomWords()
+        return "#" + "".join([word.title() for word in rw.random_words(count=3)])
+
     def get_unfinished_game_id(self):
         return self._data.get(CreateGameAction._UNFINISHED_GAME_ID, None)
 
@@ -153,7 +157,10 @@ class CreateGameAction(GameAction, PhasedAction):
     def start(self, update: Update, game_cache: GameCache, player_cache: PlayerCache, location_cache: LocationCache):
         if not self._is_query_or_error(update, update.message):
             return
-        name = update.message.text.split(" ", 1)[1]
+        try:
+            name = update.message.text.split(" ", 1)[1]
+        except IndexError:
+            name = self._create_name()
         keyboard = Keyboard()
         self.callback_data = name
         keyboard.add(Texts.CREATE_GAME, ActionBuilder.to_callback_data(self), 1, 1)
@@ -166,9 +173,7 @@ class CreateGameAction(GameAction, PhasedAction):
         old_phase = self.get_phase()
         if old_phase == 1:
             # Create the game
-            rw = RandomWords()
-            name = self.callback_data if self.callback_data else \
-                "#" + "".join([word.title() for word in rw.random_words(count=3)])
+            name = self.callback_data if self.callback_data else self._create_name()
             game = Database.create_game()
             self.set_unfinished_game_id(game.id)
             game.name = name

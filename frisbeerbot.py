@@ -19,7 +19,8 @@ class FrisbeerBot:
         self.updater = Updater(api_key)
 
         self.updater.dispatcher.add_handler(CommandHandler('start', self.greet))
-        self.updater.dispatcher.add_handler(CommandHandler('game', self.game))
+        self.updater.dispatcher.add_handler(CommandHandler('games', self.games))
+        self.updater.dispatcher.add_handler(CommandHandler('new_game', self.new_game))
         self.updater.dispatcher.add_handler(CommandHandler('rank', self.rank))
         self.updater.dispatcher.add_handler(CommandHandler('register', self.register))
         self.updater.dispatcher.add_handler(CommandHandler('location', self.location))
@@ -46,14 +47,13 @@ class FrisbeerBot:
     def greet(self, bot: Bot, update: Update):
         update.message.reply_text('Lets play frisbeer!\n Start with /game')
 
-    def game(self, bot: Bot, update: Update):
-        name = update.message.text.split("/game")[1].strip()
-        if not name:
-            ActionBuilder.start(ActionBuilder.create(ActionTypes.GAME_MENU),
-                                update, self.game_cache, self.player_cache, self.location_cache)
-        else:
-            ActionBuilder.start(ActionBuilder.create(ActionTypes.CREATE_GAME),
-                                update, self.game_cache, self.player_cache, self.location_cache)
+    def games(self, bot: Bot, update: Update):
+        ActionBuilder.start(ActionBuilder.create(ActionTypes.GAME_MENU),
+                            update, self.game_cache, self.player_cache, self.location_cache)
+
+    def new_game(self, bot: Bot, update: Update):
+        ActionBuilder.start(ActionBuilder.create(ActionTypes.CREATE_GAME),
+                            update, self.game_cache, self.player_cache, self.location_cache)
 
     def register(self, bot, update):
         logging.info("Registering nick")
