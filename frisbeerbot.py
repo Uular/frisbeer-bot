@@ -18,6 +18,7 @@ class FrisbeerBot:
     def __init__(self, api_key):
         self.updater = Updater(api_key)
 
+        self.updater.dispatcher.add_handler(CommandHandler('help', self.help))
         self.updater.dispatcher.add_handler(CommandHandler('start', self.greet))
         self.updater.dispatcher.add_handler(CommandHandler('games', self.games))
         self.updater.dispatcher.add_handler(CommandHandler('new_game', self.new_game))
@@ -167,3 +168,15 @@ class FrisbeerBot:
         else:
             Database.delete_channel(channel_id)
             update.message.reply_text("Unregistered this channel from notifications")
+
+    def help(self, bot, update):
+        logging.info("Printing help message")
+        update.message.reply_text(
+            "help - show available commands\n"
+            "rank - query a player rank /rank [frisbeer nick|telegram username]\n"
+            "register - pair your frisbeer nickname with telegram user register frisbeer_nick /register frisbeer nick\n"
+            "games - show current games\n"
+            "new_game - create a new game /new_game [#Name]\n"
+            "location - add a new location for games /location name[;longitude;latitude]\n"
+            "notification_channel - register channel to receive notifications of changes in game /notification_channel"
+        )
