@@ -19,6 +19,9 @@ class Keyboard:
     def add_button(self, button: KeyboardButton, row: int, col: int) -> None:
         self.add(button.text, button.callback_data, row, col)
 
+    def add_refresh(self, callback_data: str, text: str = Texts.REFRESH, row=99, col=1) -> None:
+        self._content.setdefault(row, {})[col] = KeyboardButton(text, callback_data)
+
     def create(self) -> InlineKeyboardMarkup:
         rows = self._content.keys()
         keyboard = []

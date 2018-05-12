@@ -174,6 +174,7 @@ class CreateGameAction(GameAction, PhasedAction):
     def run_callback(self, bot: Bot, update: Update, game_cache: GameCache, player_cache: PlayerCache,
                      location_cache: LocationCache):
         message = update.callback_query.message
+        old_action = ActionBuilder.copy_action(self)
         old_phase = self.get_phase()
         if old_phase == 1:
             # Create the game
@@ -213,8 +214,8 @@ class CreateGameAction(GameAction, PhasedAction):
             return
 
         new_phase = self.increase_phase()
-
         keyboard = BackButtonKeyboard(ActionBuilder.action_as_callback_data(ActionTypes.GAME_MENU), Texts.CANCEL)
+
         if new_phase == 2:
             # Query a date
             days = ["Today", "Tomorrow", "+2", "+3", "+4", "+5"]
@@ -247,6 +248,7 @@ class CreateGameAction(GameAction, PhasedAction):
                 action.callback_data = location.id
                 keyboard.add("{}".format(location.name), ActionBuilder.to_callback_data(action), i, 1)
                 i += 1
+            keyboard.add_refresh(ActionBuilder.to_callback_data(old_action))
             text = Texts.ENTER_LOCATION
         elif new_phase == 6:
             # Confirm creation
@@ -423,6 +425,7 @@ class ListGamesAction(Action):
 
         keyboard.add(Texts.CREATE_GAME, ActionBuilder.action_as_callback_data(ActionTypes.CREATE_GAME), 100, 1)
         keyboard.add(Texts.BACK, ActionBuilder.action_as_callback_data(ActionTypes.GAME_MENU), 100, 2)
+        keyboard.add_refresh(ActionBuilder.to_callback_data(ActionBuilder.copy_action(self)))
         update.callback_query.message.edit_text(text, reply_markup=keyboard.create())
 
 

@@ -1,6 +1,7 @@
 class Texts:
     CANCEL = "Cancel"
     CLOSE = "Close"
+    REFRESH = "Refresh"
     GAMES_WAITING_APPROVAL = "These games haven't been approved by admin"
     NO_GAMES_WAITING_APPROVAL = "All games have been approved"
     READY_GAMES = "Ready games"
