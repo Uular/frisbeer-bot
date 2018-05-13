@@ -46,7 +46,7 @@ class FrisbeerBot:
         action.run_callback(bot, update, self.game_cache, self.player_cache, self.location_cache)
 
     def greet(self, bot: Bot, update: Update):
-        update.message.reply_text('Lets play frisbeer!\n Start with /game')
+        update.message.reply_text('Lets play frisbeer!\n Start with /games')
 
     def games(self, bot: Bot, update: Update):
         ActionBuilder.start(ActionBuilder.create(ActionTypes.GAME_MENU),
