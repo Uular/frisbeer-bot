@@ -8,6 +8,7 @@ import redis
 from random_words import RandomWords
 
 from telegram import Update, Message, Bot, Chat
+from telegram.error import BadRequest
 
 from actiontypes import ActionTypes
 from cache import NotFoundError
@@ -69,7 +70,10 @@ class Action:
     @staticmethod
     def _send_notification(bot: Bot, message: str) -> None:
         for channel in Database.get_notification_channels():
-            bot.send_message(chat_id=channel.channel_id, text=message)
+            try:
+                bot.send_message(chat_id=channel.channel_id, text=message)
+            except BadRequest as e:
+                logging.error("Error sending notification {} to channel {} {}", message, channel, e)
 
     def _is_query_or_error(self, update, message):
         """
