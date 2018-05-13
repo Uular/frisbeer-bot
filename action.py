@@ -252,8 +252,7 @@ class CreateGameAction(GameAction, PhasedAction):
             text = Texts.ENTER_LOCATION
         elif new_phase == 6:
             # Confirm creation
-            action = ActionBuilder.copy_action(self)
-            keyboard.add(Texts.CREATE_GAME, ActionBuilder.to_callback_data(action), 1, 1)
+            keyboard.add(Texts.CREATE_GAME, ActionBuilder.copy_to_callback_data(self), 1, 1)
             action = ActionBuilder.create(ActionTypes.CREATE_GAME)
             action.callback_data = game.name
             keyboard.add(Texts.EDIT_GAME, ActionBuilder.to_callback_data(action), 2, 1)
@@ -306,23 +305,18 @@ class InspectGameAction(GameAction, PhasedAction):
             return
 
         if not game.is_in_game(player):
-            action = ActionBuilder.copy_action(self, ActionTypes.JOIN_GAME)
-            keyboard.add(Texts.WANT_TO_JOIN, ActionBuilder.to_callback_data(action), 2, 1)
+            keyboard.add(Texts.WANT_TO_JOIN, ActionBuilder.copy_to_callback_data(self, ActionTypes.JOIN_GAME), 2, 1)
             if not game.players:
-                action = ActionBuilder.copy_action(self, ActionTypes.DELETE_GAME)
-                keyboard.add(Texts.DELETE_GAME, ActionBuilder.to_callback_data(action), 3, 1)
+                keyboard.add(Texts.DELETE_GAME, ActionBuilder.copy_to_callback_data(self, ActionTypes.DELETE_GAME), 3, 1)
         else:
-            action = ActionBuilder.copy_action(self, ActionTypes.LEAVE_GAME)
-            keyboard.add(Texts.LEAVE_GAME, ActionBuilder.to_callback_data(action), 2, 1)
+            keyboard.add(Texts.LEAVE_GAME, ActionBuilder.copy_to_callback_data(self, ActionTypes.LEAVE_GAME), 2, 1)
         message.edit_text(game.long_str(), reply_markup=keyboard.create())
 
     def _inspect_full_pending_game(self, update, game, player, keyboard, game_cache, player_cache, location_cache):
         logging.info("Inspecting full pending game")
         message = update.callback_query.message
         if game.is_in_game(player):
-            keyboard.add(Texts.CREATE_TEAMS,
-                         ActionBuilder.to_callback_data(ActionBuilder.copy_action(self, ActionTypes.CREATE_TEAMS)),
-                         1, 1)
+            keyboard.add(Texts.CREATE_TEAMS, ActionBuilder.copy_to_callback_data(self, ActionTypes.CREATE_TEAMS), 1, 1)
         message.edit_text(game.long_str(), reply_markup=keyboard.create())
 
     def _scoring_keyboard(self, game, keyboard: Keyboard) -> Keyboard:
@@ -425,7 +419,7 @@ class ListGamesAction(Action):
 
         keyboard.add(Texts.CREATE_GAME, ActionBuilder.action_as_callback_data(ActionTypes.CREATE_GAME), 100, 1)
         keyboard.add(Texts.BACK, ActionBuilder.action_as_callback_data(ActionTypes.GAME_MENU), 100, 2)
-        keyboard.add_refresh(ActionBuilder.to_callback_data(ActionBuilder.copy_action(self)))
+        keyboard.add_refresh(ActionBuilder.copy_to_callback_data(self))
         update.callback_query.message.edit_text(text, reply_markup=keyboard.create())
 
 
@@ -653,7 +647,7 @@ class DeleteGameAction(GameAction, PhasedAction):
             action.increase_phase()
             action.game_id = game.id
             action.callback_data = True
-            yes = ActionBuilder.to_callback_data(ActionBuilder.copy_action(action))
+            yes = ActionBuilder.copy_to_callback_data(action)
             action.callback_data = False
             no = ActionBuilder.to_callback_data(action)
             keyboard = YesNoKeyboard(yes, no)
@@ -744,6 +738,14 @@ class ActionBuilder:
         if action_type is None:
             return action.from_json(key=uuid.uuid4(), json_data=action.to_json())
         return ActionBuilder._action_mapping[action_type].from_json(key=uuid.uuid4(), json_data=action.to_json())
+
+    @staticmethod
+    def copy_to_callback_data(action: Action, action_type: ActionTypes = None):
+        if action_type is None:
+            a = action.from_json(key=uuid.uuid4(), json_data=action.to_json())
+        else:
+            a = ActionBuilder._action_mapping[action_type].from_json(key=uuid.uuid4(), json_data=action.to_json())
+        return ActionBuilder.to_callback_data(a)
 
     @staticmethod
     def to_callback_data(action: Action):
