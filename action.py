@@ -73,7 +73,7 @@ class Action:
             try:
                 bot.send_message(chat_id=channel.channel_id, text=message)
             except BadRequest as e:
-                logging.error("Error sending notification {} to channel {} {}", message, channel, e)
+                logging.error("Error sending notification %s to channel %s %s", message, channel.channel_id, e)
 
     def _is_query_or_error(self, update, message):
         """
