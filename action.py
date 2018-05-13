@@ -523,7 +523,7 @@ class JoinGameAction(GameAction):
             message.edit_text(Texts.JOIN_FAILED, reply_markup=keyboard.create())
             return
         game_cache.update(game)
-        self._send_notification(bot, "{} joined game {}".format(player.nick, game.name))
+        self._send_notification(bot, "{} joined game {}. Join by sending me /games in a private chat".format(player.nick, game.name))
         ActionBuilder.redirect(ActionBuilder.copy_action(self, ActionTypes.INSPECT_GAME), bot, update,
                                game_cache, player_cache, location_cache)
 
