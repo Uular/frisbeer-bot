@@ -592,7 +592,10 @@ class LeaveGameAction(GameAction):
             return
 
         game_cache.update(game)
-        self._send_notification(bot, "{} left game {}".format(player.nick, game.name))
+        a = ActionBuilder.create(ActionTypes.INSPECT_GAME)
+        a.game_id = game.id
+        self._send_notification(bot, "{} left game {}. Currently {}/6 players. Join here {}".format(
+            player.nick, game.name, len(game.players), ActionBuilder.to_start_link(bot, a)))
         ActionBuilder.redirect(ActionBuilder.copy_action(self, ActionTypes.INSPECT_GAME), bot, update,
                                game_cache, player_cache, location_cache)
 
@@ -625,14 +628,13 @@ class CreateTeamsAction(GameAction, PhasedAction):
             if self.callback_data:
                 game = game.create_teams()
                 game_cache.update(game)
+                self._send_notification(bot, "Teams for {} are {} - {}"
+                                        .format(game.name,
+                                                ", ".join(player.nick for player in game.team1),
+                                                ", ".join(player.nick for player in game.team2),
+                                                ))
             action = ActionBuilder.create(ActionTypes.INSPECT_GAME)
             action.game_id = game.id
-            self._send_notification(bot, "Teams for {} are {} - {}".format(game.name,
-                                                                           ", ".join(
-                                                                               player.nick for player in game.team1),
-                                                                           ", ".join(
-                                                                               player.nick for player in game.team2),
-                                                                           ))
             ActionBuilder.redirect(action, bot, update, game_cache, player_cache, location_cache)
 
 
