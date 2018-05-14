@@ -218,9 +218,13 @@ class CreateGameAction(GameAction, PhasedAction):
             game_cache.update_instance(created_game)
             action = ActionBuilder.create(ActionTypes.INSPECT_GAME)
             action.game_id = created_game.id
-            self._send_notification(bot, "A new upcoming game {} {} @{}"
+            inspect_action = ActionBuilder.create(ActionTypes.INSPECT_GAME)
+            inspect_action.game_id = created_game.id
+            self._send_notification(bot, "A new upcoming game {} {} @{}. Join here {}"
                                     .format(created_game.name, created_game.date.strftime("%a %d. %b %H:%M"),
-                                            created_game.location.name))
+                                            created_game.location.name,
+                                            ActionBuilder.to_start_link(bot, inspect_action))
+                                    )
             ActionBuilder.redirect(action, bot, update, game_cache, player_cache, location_cache)
             return
 
@@ -544,11 +548,8 @@ class JoinGameAction(GameAction):
         action = ActionBuilder.create(ActionTypes.INSPECT_GAME)
         action.game_id = game.id
         ActionBuilder.save(action)
-        self._send_notification(
-            bot,
-            "{} joined game {}. Join here t.me/{}?start={}".format(
-                player.nick, game.name, bot.name.strip("@"),
-                base64.urlsafe_b64encode(bytearray(ActionBuilder.to_callback_data(action), "utf-8")).decode('utf-8')))
+        self._send_notification(bot, "{} joined game {}. Join here {}".format(
+            player.nick, game.name, ActionBuilder.to_start_link(bot, action)))
         ActionBuilder.redirect(ActionBuilder.copy_action(self, ActionTypes.INSPECT_GAME), bot, update,
                                game_cache, player_cache, location_cache)
 
@@ -794,3 +795,8 @@ class ActionBuilder:
     @staticmethod
     def _get_key():
         return str(uuid.uuid4()).replace('-', '')[:-1]
+
+    @staticmethod
+    def to_start_link(bot, action):
+        return "t.me/{}?start={}".format(bot.name.strip("@"), base64.urlsafe_b64encode(
+            bytearray(ActionBuilder.to_callback_data(action), "utf-8")).decode('utf-8'))
