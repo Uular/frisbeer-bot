@@ -33,6 +33,7 @@ class Cache(Generic[C]):
         :param data: List of Dictionaries from which to build cache (ie. response.json() from API)
         :return: None
         """
+        self.data_store = {}
         for entity in data:
             obj = self.cls.from_json(entity)
             key_val = self.key_accessor(obj)
