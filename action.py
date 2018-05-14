@@ -548,8 +548,13 @@ class JoinGameAction(GameAction):
         action = ActionBuilder.create(ActionTypes.INSPECT_GAME)
         action.game_id = game.id
         ActionBuilder.save(action)
-        self._send_notification(bot, "{} joined game {}. Join here {}".format(
-            player.nick, game.name, ActionBuilder.to_start_link(bot, action)))
+        if len(game.players) < 6:
+            self._send_notification(bot, "{} joined game {}. Currently {}/6 players. Join here {}"
+                                    .format(player.nick, game.name, len(game.players),
+                                            ActionBuilder.to_start_link(bot, action)))
+        else:
+            self._send_notification(bot, "{} joined game {}. Game is full. Players in game can create teams here {}"
+                                    .format(player.nick, game.name, ActionBuilder.to_start_link(bot, action)))
         ActionBuilder.redirect(ActionBuilder.copy_action(self, ActionTypes.INSPECT_GAME), bot, update,
                                game_cache, player_cache, location_cache)
 
