@@ -11,5 +11,11 @@ services:
       - ../db.sqlite3:/opt/frisbeer-bot/db.sqlite3
     env_file:
       - ../bot-variables.env
+    networks:
+      - bot-network
   redis:
     image: redis:3.2.10
+    networks:
+      - bot-network
+networks:
+  bot-network:
