@@ -1,3 +1,4 @@
+import base64
 import json
 import logging
 import uuid
@@ -85,6 +86,11 @@ class Action:
             return False
         return True
 
+    @staticmethod
+    def _answer(update: Update):
+        if update.callback_query:
+            update.callback_query.answer()
+
 
 class PhasedAction(Action):
     """
@@ -152,7 +158,8 @@ class CreateGameAction(GameAction, PhasedAction):
     TYPE = ActionTypes.CREATE_GAME
     _UNFINISHED_GAME_ID = "unfinished_game_id"
 
-    def _create_name(self):
+    @staticmethod
+    def _create_name():
         rw = RandomWords()
         return "#" + "".join([word.title() for word in rw.random_words(count=3)])
 
@@ -273,11 +280,20 @@ class CreateGameAction(GameAction, PhasedAction):
 class InspectGameAction(GameAction, PhasedAction):
     TYPE = ActionTypes.INSPECT_GAME
 
+    def start(self, update: Update, game_cache: GameCache, player_cache: PlayerCache, location_cache: LocationCache):
+        logging.info("Inspecting game %s", self.game_id)
+        message = update.message.reply_text("Loading...")
+        self._inspect(message, update, game_cache, player_cache, location_cache)
+
     def run_callback(self, bot: Bot, update: Update, game_cache: GameCache, player_cache: PlayerCache,
                      location_cache: LocationCache):
         logging.info("Inspecting game {}".format(self.game_id))
         message = update.callback_query.message
         self._show_loading(message)
+        self._inspect(message, update, game_cache, player_cache, location_cache)
+
+    def _inspect(self, message: Message, update: Update, game_cache: GameCache, player_cache: PlayerCache,
+                 location_cache: LocationCache):
         keyboard = Keyboard()
         keyboard.add(Texts.BACK, ActionBuilder.action_as_callback_data(ActionTypes.LIST_PENDING_GAMES), 10, 1)
         try:
@@ -287,38 +303,42 @@ class InspectGameAction(GameAction, PhasedAction):
         player = get_player(player_cache, update)
 
         if len(game.players) < 6:
-            self._inspect_undermanned_game(update, game, player, keyboard, game_cache, player_cache, location_cache)
+            self._inspect_undermanned_game(message, update, game, player, keyboard, game_cache, player_cache,
+                                           location_cache)
 
         elif len(game.players) == 6 and game.state == Game.State.PENDING:
-            self._inspect_full_pending_game(update, game, player, keyboard, game_cache, player_cache, location_cache)
+            self._inspect_full_pending_game(message, update, game, player, keyboard, game_cache, player_cache,
+                                            location_cache)
 
         elif game.state == Game.State.READY:
-            self._inspect_ready_game(update, game, player, keyboard, game_cache, player_cache, location_cache)
+            self._inspect_ready_game(message, update, game, player, keyboard, game_cache, player_cache, location_cache)
 
         elif game.state == Game.State.PLAYED:
-            self._inspect_played_game(update, game, player, keyboard, game_cache, player_cache, location_cache)
+            self._inspect_played_game(message, update, game, player, keyboard, game_cache, player_cache, location_cache)
 
-    def _inspect_undermanned_game(self, update, game, player, keyboard, game_cache, player_cache, location_cache):
+    def _inspect_undermanned_game(self, message: Message, update, game, player, keyboard,
+                                  game_cache, player_cache, location_cache):
         logging.info("Inspecting undermanned game")
-        message = update.callback_query.message
+        self._answer(update)
 
         if not player:
             logging.info("User not registered")
-            update.callback_query.message.reply_text("Please register first using /register <frisbeer nick>")
-            update.callback_query.answer()
+            message.reply_text("Please register first using /register <frisbeer nick>")
+            self._answer(update)
             return
 
         if not game.is_in_game(player):
             keyboard.add(Texts.WANT_TO_JOIN, ActionBuilder.copy_to_callback_data(self, ActionTypes.JOIN_GAME), 2, 1)
             if not game.players:
-                keyboard.add(Texts.DELETE_GAME, ActionBuilder.copy_to_callback_data(self, ActionTypes.DELETE_GAME), 3, 1)
+                keyboard.add(Texts.DELETE_GAME, ActionBuilder.copy_to_callback_data(self, ActionTypes.DELETE_GAME), 3,
+                             1)
         else:
             keyboard.add(Texts.LEAVE_GAME, ActionBuilder.copy_to_callback_data(self, ActionTypes.LEAVE_GAME), 2, 1)
         message.edit_text(game.long_str(), reply_markup=keyboard.create())
 
-    def _inspect_full_pending_game(self, update, game, player, keyboard, game_cache, player_cache, location_cache):
+    def _inspect_full_pending_game(self, message, update, game, player, keyboard, game_cache, player_cache,
+                                   location_cache):
         logging.info("Inspecting full pending game")
-        message = update.callback_query.message
         if game.is_in_game(player):
             keyboard.add(Texts.CREATE_TEAMS, ActionBuilder.copy_to_callback_data(self, ActionTypes.CREATE_TEAMS), 1, 1)
         message.edit_text(game.long_str(), reply_markup=keyboard.create())
@@ -333,9 +353,8 @@ class InspectGameAction(GameAction, PhasedAction):
             keyboard.add("{} - {}".format(t1_scores[i], t2_scores[i]), ActionBuilder.to_callback_data(action), 1, i)
         return keyboard
 
-    def _inspect_ready_game(self, update, game, player, keyboard, game_cache, player_cache, location_cache):
+    def _inspect_ready_game(self, message, update, game, player, keyboard, game_cache, player_cache, location_cache):
         logging.info("Inspecting full game")
-        message = update.callback_query.message
         self._show_loading(message)
 
         keyboard = BackButtonKeyboard(ActionBuilder.action_as_callback_data(ActionTypes.LIST_READY_GAMES))
@@ -348,10 +367,9 @@ class InspectGameAction(GameAction, PhasedAction):
                                                                ),
             reply_markup=keyboard.create())
 
-    def _inspect_played_game(self, update: Update, game: Game, player: Player, keyboard: Keyboard,
+    def _inspect_played_game(self, message: Message, update: Update, game: Game, player: Player, keyboard: Keyboard,
                              game_cache: GameCache, player_cache: PlayerCache, location_cache: LocationCache):
         logging.info("Inspecting full game")
-        message = update.callback_query.message
         self._show_loading(message)
         keyboard = BackButtonKeyboard(ActionBuilder.action_as_callback_data(ActionTypes.LIST_PENDING_ACCEPTING_GAMES))
         keyboard = self._scoring_keyboard(game, keyboard)
@@ -523,7 +541,14 @@ class JoinGameAction(GameAction):
             message.edit_text(Texts.JOIN_FAILED, reply_markup=keyboard.create())
             return
         game_cache.update(game)
-        self._send_notification(bot, "{} joined game {}. Join by sending me /games in a private chat".format(player.nick, game.name))
+        action = ActionBuilder.create(ActionTypes.INSPECT_GAME)
+        action.game_id = game.id
+        ActionBuilder.save(action)
+        self._send_notification(
+            bot,
+            "{} joined game {}. Join here t.me/{}?start={}".format(
+                player.nick, game.name, bot.name.strip("@"),
+                base64.urlsafe_b64encode(bytearray(ActionBuilder.to_callback_data(action), "utf-8")).decode('utf-8')))
         ActionBuilder.redirect(ActionBuilder.copy_action(self, ActionTypes.INSPECT_GAME), bot, update,
                                game_cache, player_cache, location_cache)
 
@@ -733,22 +758,24 @@ class ActionBuilder:
 
     @staticmethod
     def create(type_: ActionTypes):
-        a = ActionBuilder._action_mapping[type_](key=uuid.uuid4())
+        a = ActionBuilder._action_mapping[type_](key=ActionBuilder._get_key())
         ActionBuilder.save(a)
         return a
 
     @staticmethod
     def copy_action(action: Action, action_type: ActionTypes = None):
         if action_type is None:
-            return action.from_json(key=uuid.uuid4(), json_data=action.to_json())
-        return ActionBuilder._action_mapping[action_type].from_json(key=uuid.uuid4(), json_data=action.to_json())
+            return action.from_json(key=ActionBuilder._get_key(), json_data=action.to_json())
+        return ActionBuilder._action_mapping[action_type].from_json(key=ActionBuilder._get_key(),
+                                                                    json_data=action.to_json())
 
     @staticmethod
     def copy_to_callback_data(action: Action, action_type: ActionTypes = None):
         if action_type is None:
-            a = action.from_json(key=uuid.uuid4(), json_data=action.to_json())
+            a = action.from_json(key=ActionBuilder._get_key(), json_data=action.to_json())
         else:
-            a = ActionBuilder._action_mapping[action_type].from_json(key=uuid.uuid4(), json_data=action.to_json())
+            a = ActionBuilder._action_mapping[action_type].from_json(key=ActionBuilder._get_key(),
+                                                                     json_data=action.to_json())
         return ActionBuilder.to_callback_data(a)
 
     @staticmethod
@@ -757,9 +784,13 @@ class ActionBuilder:
         return json.dumps({
             ActionBuilder._KEY_UUID: str(action.key),
             ActionBuilder._KEY_TYPE: action.TYPE.value,
-        })
+        }, separators=(',', ':'))
 
     @staticmethod
     def action_as_callback_data(type_: ActionTypes):
         a = ActionBuilder.create(type_)
         return ActionBuilder.to_callback_data(a)
+
+    @staticmethod
+    def _get_key():
+        return str(uuid.uuid4()).replace('-', '')[:-1]

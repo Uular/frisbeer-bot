@@ -1,3 +1,4 @@
+import base64
 import logging
 
 import telegram
@@ -46,7 +47,16 @@ class FrisbeerBot:
         action.run_callback(bot, update, self.game_cache, self.player_cache, self.location_cache)
 
     def greet(self, bot: Bot, update: Update):
-        update.message.reply_text('Lets play frisbeer!\n Start with /games')
+        try:
+            m = update.message.text.split("start ", 1)[1]
+        except IndexError:
+            logging.info("Start without parameters")
+            update.message.reply_text('Lets play frisbeer!\n Start with /games')
+            return
+        logging.info("Start message with payload %s", m)
+        m = base64.b64decode(m)
+        action = ActionBuilder.from_callback_data(m)
+        action.start(update, self.game_cache, self.player_cache, self.location_cache)
 
     def games(self, bot: Bot, update: Update):
         ActionBuilder.start(ActionBuilder.create(ActionTypes.GAME_MENU),
