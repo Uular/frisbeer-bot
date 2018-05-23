@@ -48,7 +48,7 @@ class FrisbeerBot:
 
     def greet(self, bot: Bot, update: Update):
         try:
-            m = update.message.text.split("start ", 1)[1]
+            m = update.message.text.split(" ", 1)[1]
         except IndexError:
             logging.info("Start without parameters")
             update.message.reply_text('Lets play frisbeer!\n Start with /games')
@@ -75,7 +75,7 @@ class FrisbeerBot:
         telegram_user_id = update.message.from_user.id
 
         try:
-            frisbeer_nick = update.message.text.split("register ", 1)[1]
+            frisbeer_nick = update.message.text.split(" ", 1)[1]
         except IndexError:
             reply("Usage: /register <frisbeer nick>")
             return
@@ -106,7 +106,7 @@ class FrisbeerBot:
         logging.info("Rank query")
         logging.debug(update.message.text)
         try:
-            nick = update.message.text.split("/rank ", 1)[1]
+            nick = update.message.text.split(" ", 1)[1]
         except IndexError:
             # No nick provided by user
             telegram_user_id = update.message.from_user.id
@@ -141,7 +141,7 @@ class FrisbeerBot:
         reply = update.message.reply_text
 
         try:
-            location = update.message.text.split("location ", 1)[1].strip()
+            location = update.message.text.split(" ", 1)[1].strip()
         except IndexError:
             reply(usage)
             return
