@@ -188,5 +188,6 @@ class FrisbeerBot:
             "games - show current games\n"
             "new_game - create a new game /new_game [#Name]\n"
             "location - add a new location for games /location name[;longitude;latitude]\n"
-            "notification_channel - register channel to receive notifications of changes in game /notification_channel"
+            "notification_channel - register channel to receive notifications of changes in game /notification_channel\n"
+            "For ideas and issues see https://github.com/Moetto/frisbeer-bot"
         )
