@@ -1,5 +1,6 @@
 from cacheable import Cacheable
 from rank import Rank
+from api import API
 
 
 class Player(Cacheable):
@@ -24,6 +25,15 @@ class Player(Cacheable):
             json_data[Player.SCORE],
             json_data.get("team", None)
         )
+
+    @staticmethod
+    def create(name: str):
+        """
+        Create a game in frisbeer backend
+        :param name: Name of the player
+        :return: Player object representing the game
+        """
+        return Player.from_json(API.create_player(name))
 
     def __str__(self):
         if self.rank:

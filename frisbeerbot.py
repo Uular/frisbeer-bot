@@ -12,6 +12,7 @@ from database import Database
 from gamecache import GameCache
 from location import Location
 from locationcache import LocationCache
+from player import Player
 from playercache import PlayerCache
 
 
@@ -25,6 +26,7 @@ class FrisbeerBot:
         self.updater.dispatcher.add_handler(CommandHandler('new_game', self.new_game))
         self.updater.dispatcher.add_handler(CommandHandler('rank', self.rank))
         self.updater.dispatcher.add_handler(CommandHandler('register', self.register))
+        self.updater.dispatcher.add_handler(CommandHandler('new_player', self.new_player))
         self.updater.dispatcher.add_handler(CommandHandler('location', self.location))
         self.updater.dispatcher.add_handler(CommandHandler('notification_channel', self.notification_channel))
         self.updater.dispatcher.add_handler(CallbackQueryHandler(self.callback))
@@ -98,6 +100,27 @@ class FrisbeerBot:
             telegram_user.frisbeer_id = frisbeer_user.id
             reply("Updated nick to {}".format(frisbeer_nick))
         Database.save()
+
+    def new_player(self, bot, update):
+        usage = "Usage: /new_player <nick>"
+        reply = update.message.reply_text
+        try:
+            frisbeer_nick = update.message.text.split(" ", 1)[1]
+        except IndexError:
+            reply(usage)
+            return
+
+        existing = self.player_cache.filter(lambda player: player.nick == frisbeer_nick)
+        if existing:
+            reply(f"Player {frisbeer_nick} already exists. Use /register <nick> to use this nick.")
+            return
+
+        created = Player.create(frisbeer_nick)
+        if not created:
+            reply(usage)
+            return
+        self.player_cache.update_instance(created)
+        self.register(bot, update)
 
     def rank(self, bot, update):
         usage = "Usage: /rank <frisbeer nick | telegram username> \n" \

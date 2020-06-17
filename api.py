@@ -77,6 +77,13 @@ class API:
         return API._get(players)
 
     @staticmethod
+    def create_player(name: str):
+        payload = {
+            "name": name
+        }
+        return API._post(players, payload=payload)
+
+    @staticmethod
     def create_game(name: str, date, location: int):
         payload = {
             "name": name,
