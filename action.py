@@ -306,11 +306,10 @@ class InspectGameAction(GameAction, PhasedAction):
             return
         player = get_player(player_cache, update)
 
-        if len(game.players) < 6:
+        if len(game.players) < game.rules.max_players and game.state == Game.State.PENDING:
             self._inspect_undermanned_game(message, update, game, player, keyboard, game_cache, player_cache,
                                            location_cache)
-
-        elif len(game.players) == 6 and game.state == Game.State.PENDING:
+        elif len(game.players) == game.rules.max_players and game.state == Game.State.PENDING:
             self._inspect_full_pending_game(message, update, game, player, keyboard, game_cache, player_cache,
                                             location_cache)
 
@@ -338,6 +337,11 @@ class InspectGameAction(GameAction, PhasedAction):
                              1)
         else:
             keyboard.add(Texts.LEAVE_GAME, ActionBuilder.copy_to_callback_data(self, ActionTypes.LEAVE_GAME), 2, 1)
+
+        if len(game.players) >= game.rules.min_players and game.is_in_game(player):
+            keyboard.add(Texts.CREATE_TEAMS,
+                         ActionBuilder.copy_to_callback_data(self, ActionTypes.CREATE_TEAMS), 3, 1)
+
         message.edit_text(game.long_str(), reply_markup=keyboard.create())
 
     def _inspect_full_pending_game(self, message, update, game, player, keyboard, game_cache, player_cache,
@@ -348,13 +352,16 @@ class InspectGameAction(GameAction, PhasedAction):
         message.edit_text(game.long_str(), reply_markup=keyboard.create())
 
     def _scoring_keyboard(self, game, keyboard: Keyboard) -> Keyboard:
-        t1_scores = [2, 2, 1, 0]
-        t2_scores = [0, 1, 2, 2]
-        for i in range(4):
+        # Min-rounds is basically "how many does either team need to win"
+        min_r = game.rules.min_rounds
+
+        t1_scores = list(range(min_r)) + [min_r] * min_r
+        t2_scores = t1_scores[::-1]
+        for i, (t1, t2) in enumerate(zip(t1_scores, t2_scores)):
             action = ActionBuilder.create(ActionTypes.SUBMIT_SCORE)
             action.game_id = game.id
-            action.callback_data = {"t1": t1_scores[i], "t2": t2_scores[i]}
-            keyboard.add("{} - {}".format(t1_scores[i], t2_scores[i]), ActionBuilder.to_callback_data(action), 1, i)
+            action.callback_data = {"t1": t1, "t2": t2}
+            keyboard.add(f"{t1} - {t2}", ActionBuilder.to_callback_data(action), 1, i)
         return keyboard
 
     def _inspect_ready_game(self, message, update, game, player, keyboard, game_cache, player_cache, location_cache):
@@ -457,7 +464,8 @@ class ListPendingGamesAction(ListGamesAction):
 
     @staticmethod
     def _game_str(game: Game):
-        return "{} {}/6 {}".format(game.date.strftime("%a %d. %b %H:%M"), len(game.players), game.name)
+        return "{} {}/{} {}".format(game.date.strftime("%a %d. %b %H:%M"), len(game.players),
+                                    game.max_players_str, game.name)
 
     @staticmethod
     def _additional_buttons(game: Game, player: Player) -> Iterable[KeyboardButton]:
@@ -548,9 +556,9 @@ class JoinGameAction(GameAction):
         action = ActionBuilder.create(ActionTypes.INSPECT_GAME)
         action.game_id = game.id
         ActionBuilder.save(action)
-        if len(game.players) < 6:
-            self._send_notification(bot, "{} joined game {}. Currently {}/6 players. Join here {}"
-                                    .format(player.nick, game.name, len(game.players),
+        if len(game.players) < game.rules.max_players:
+            self._send_notification(bot, "{} joined game {}. Currently {}/{} players. Join here {}"
+                                    .format(player.nick, game.name, len(game.players), game.max_players_str,
                                             ActionBuilder.to_start_link(bot, action)))
         else:
             self._send_notification(bot, "{} joined game {}. Game is full. Players in game can create teams here {}"
@@ -594,8 +602,8 @@ class LeaveGameAction(GameAction):
         game_cache.update(game)
         a = ActionBuilder.create(ActionTypes.INSPECT_GAME)
         a.game_id = game.id
-        self._send_notification(bot, "{} left game {}. Currently {}/6 players. Join here {}".format(
-            player.nick, game.name, len(game.players), ActionBuilder.to_start_link(bot, a)))
+        self._send_notification(bot, "{} left game {}. Currently {}/{} players. Join here {}".format(
+            player.nick, game.name, len(game.players), game.max_players_str, ActionBuilder.to_start_link(bot, a)))
         ActionBuilder.redirect(ActionBuilder.copy_action(self, ActionTypes.INSPECT_GAME), bot, update,
                                game_cache, player_cache, location_cache)
 
